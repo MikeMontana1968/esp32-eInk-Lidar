@@ -58,16 +58,20 @@ uint pollData() {
     if(STD_DEV > 12) 
         sleep_time_seconds = 20;
 
-    memset(BUFFER, 0, sizeof(BUFFER));
-    String b = "";
     getLocalTime(&timeinfo);
-    strftime(BUFFER, sizeof(BUFFER), "%b %d %Y %H:%M:%S", &timeinfo);
-    b += String("Full  :") + String(PCT_FULL) + String("% gal ") + String(GAL_REMAIN, 1) + "\n";
-    b += String("Range :") + String(int(MPG_AVG * GAL_REMAIN)) + " miles\n";
-    b += String("Fuel Depth :") + String(AVG_MM, 0) + String("mm StdDev ") + String(STD_DEV, 2) + "\n";
-    b += String(BUFFER) + "\n";
+    char fmt_time[255] = {0};
+    strftime(fmt_time, sizeof(fmt_time), "%b-%d %r", &timeinfo);
+
+    
+    String b = "";
+    b += String(PCT_FULL) + String("% Full. ") + String(GAL_REMAIN, 1) + "g Remain\n";
+    b += String("Range: ") + String(int(MPG_AVG * GAL_REMAIN)) + " miles\n";
+    b += String("Depth: ") + String(AVG_MM, 0) + String("mm StdDev ") + String(STD_DEV, 2) + "\n";
+    b += String(fmt_time) + "\n";
     //b += String("Batt  :") + String(read_battery(), 2) + "v\n";
     //b += String("Boot  #") + String(bootCount) + " Zz " + String(sleep_time_seconds) + "s\n";
+
+    memset(BUFFER, 0, sizeof(BUFFER));
     b.toCharArray(BUFFER, b.length() + 1);
     Serial.println(BUFFER);
 

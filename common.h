@@ -168,13 +168,6 @@ esp_sleep_wakeup_cause_t print_wakeup_reason(){
     case ESP_SLEEP_WAKEUP_ULP : Serial.println("Wakeup caused by ULP program"); break;
     default : 
       Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); 
-      // if(!SPIFFS.begin(FORMAT_SPIFFS_IF_FAILED)){
-      //   Serial.println("SPIFFS Mount Failed");
-      // } else {
-      //   readFile(SPIFFS, "/activity.log");
-      // }
-
-      //Serial.printf("RTC set to %s\n", rtc.getTime("%A, %B %d %Y %H:%M:%S"));
       break;
   }
   return wakeup_reason;
@@ -182,9 +175,16 @@ esp_sleep_wakeup_cause_t print_wakeup_reason(){
 
 void setupWiFi() {
     WiFi.begin(ssid, password);  // Connect to WiFi
+    uint attempts = 20;
+    Serial.printf("setupWiFi(ssid='%s', password='%s') upto %i connect-attempts\n", ssid, password, attempts);    
     while (WiFi.status() != WL_CONNECTED) {
         delay(500);
         Serial.print(".");
+        attempts--;
+        if(attempts < 1) {
+          Serial.println("\nWIFI NOT REACHABLE");
+          return;
+        }
     }
     Serial.println("WiFi connected.");
 }
