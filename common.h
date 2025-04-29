@@ -29,14 +29,14 @@ const int daylightOffset_sec = -4 * 60 * 60;  // Daylight savings time in second
 float getMean(uint8_t* val, int arrayCount) {
   long total = 0;
   float avg = 0;
-  Serial.printf("getMean([], %i) = \n", arrayCount);
+  
   for (int i = 0; i < arrayCount; i++) {
     total = total + val[i];
   }
   if(total)
     avg = total/(float)arrayCount;
 
-  Serial.print("=" + String(avg, 2) + "\n");
+  Serial.printf("getMean([], %i)= ", arrayCount); Serial.print("=" + String(avg, 2) + "\n");
   return avg;
 }
 
@@ -52,7 +52,7 @@ float getStdDev(uint8_t* val, int arrayCount) {
   if(total)
     variance = total/(float)arrayCount;
     stdDev = sqrt(variance);
-  Serial.print("getStdDev([], " + String(arrayCount) + ")=" + String(stdDev,2) + "\n");
+  //Serial.print("getStdDev([], " + String(arrayCount) + ")=" + String(stdDev,2) + "\n");
   return stdDev;
 }
 
@@ -121,37 +121,32 @@ uint8_t read_vlx() {
   return 0;
 }
 
-uint8_t sample_vlx(uint sample_size = VLX_SAMPLE_SIZE, uint delay_ms_per_sample = MS_DELAY_PER_SAMPLE) {
+float sample_vlx(uint sample_size = VLX_SAMPLE_SIZE, uint delay_ms_per_sample = MS_DELAY_PER_SAMPLE) {
   Serial.printf("sample_vlx(sample_size=%i, delay_ms_per_sample=%i)\n", sample_size, delay_ms_per_sample);
   ulong start = millis();
   uint8_t vlx_samples[sample_size+1];
   memset(vlx_samples, sizeof(vlx_samples), 0);
   uint8_t offset = int(sample_size * 0.20);
-  uint8_t i = sample_size;
-  while(i) {
-    uint8_t x = read_vlx();
-    if(x ) {
-      vlx_samples[i--] = x;
-      delay(delay_ms_per_sample);
-    }
+  for(int i =0; i < sample_size; i++) {
+    vlx_samples[i] = read_vlx();
+    delay(delay_ms_per_sample);
   }
   sortArrayReverse(vlx_samples, sample_size);
 
   uint sum = 0;  
   uint included_sample_count = 0;
-  for(i = offset; i < (sample_size - offset); i++) {
+  for(uint i = offset; i < (sample_size - offset); i++) {
     sum += vlx_samples[i];
     included_sample_count++;
   }
   float avg = sum / included_sample_count;
   STD_DEV = getStdDev(vlx_samples, sample_size);
-  AVG_MM = avg;
   Serial.print("sample_vlx(" + String(sample_size) + ")=" + String(avg,2));
   Serial.printf(" max[%i,%i,%i]", vlx_samples[0], vlx_samples[1], vlx_samples[2]) ;
   Serial.printf(" min[%i,%i,%i]", vlx_samples[sample_size-3], vlx_samples[sample_size-2], vlx_samples[sample_size-1]) ;
   Serial.print(" stdDev " + String(STD_DEV,2)) ;
   Serial.println();
-  return (uint)avg;
+  return avg;
 }
 
 esp_sleep_wakeup_cause_t print_wakeup_reason(){

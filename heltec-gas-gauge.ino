@@ -21,66 +21,144 @@ https://github.com/todd-herbert/heltec-eink-modules/blob/main/docs/WirelessPaper
 #define MS_DELAY_PER_SAMPLE 25
 
 Adafruit_VL6180X vlx = Adafruit_VL6180X();
+#include <Adafruit_GFX.h>    // Core graphics library
 EInkDisplay_VisionMasterE290 display;
 ulong lastSyncMillis = 0;
 
-const int FULL_TANK_MM = 5;
-const int EMPTY_TANK_MM = 45;
+const int FULL_TANK_MM = 30;
+const int EMPTY_TANK_MM = 220;
 const float TANK_GALLONS = 4.5;
 const int MPG_AVG = 40;
 
+
 char BUFFER[512] = {0};
-float STD_DEV = 0;
-float AVG_MM = 0;
-int PCT_FULL = 0; 
-float F_PCT_FULL = 0.0;
-float GAL_REMAIN = 0;
+float STD_DEV = 0; // set in sample_vlx()
+float AVG_MM = 0; // set in updateDisplay()
+int PCT_FULL = 0;   // updateDisplay()
+float GAL_REMAIN = 0;   // updateDisplay
 RTC_DATA_ATTR int bootCount = 0;
 
-#define BOX_WIDTH 192
-#define BOX_HEIGHT 90
-#define BOX_TOP 100
-
 #include "common.h"
+int iteration = 0;
+const int MAX_MEASUREMENTS = DISPLAY_WIDTH;
+uint measurements[MAX_MEASUREMENTS] = {0};
 
-uint pollData() {
-    Serial.println("pollData()");
-  
-    sample_vlx();
-    PCT_FULL = map(AVG_MM, FULL_TANK_MM, EMPTY_TANK_MM, 1, 100); 
-    if(PCT_FULL < 0)
-    PCT_FULL = 0;
-
-    F_PCT_FULL = (.01 * PCT_FULL);
-    float GAL_REMAIN = TANK_GALLONS * F_PCT_FULL;
-
-    uint sleep_time_seconds = 5 * 60;
-    if(STD_DEV > 12) 
-        sleep_time_seconds = 20;
-
-    getLocalTime(&timeinfo);
-    char fmt_time[255] = {0};
-    strftime(fmt_time, sizeof(fmt_time), "%b-%d %r", &timeinfo);
-
-    
+uint updateDisplay() {
+    uint16_t text_width = 0;
+    uint16_t text_height = 0;
+    uint16_t radius = 3;
+    uint16_t bargraph_height = 26;
+    uint16_t bargraph_width = 225;
+    uint16_t offset = 1;
     String b = "";
-    b += String(PCT_FULL) + String("% Full. ") + String(GAL_REMAIN, 1) + "g Remain\n";
-    b += String("Range: ") + String(int(MPG_AVG * GAL_REMAIN)) + " miles\n";
-    b += String("Depth: ") + String(AVG_MM, 0) + String("mm StdDev ") + String(STD_DEV, 2) + "\n";
-    b += String(fmt_time) + "\n";
-    //b += String("Batt  :") + String(read_battery(), 2) + "v\n";
-    //b += String("Boot  #") + String(bootCount) + " Zz " + String(sleep_time_seconds) + "s\n";
+    Serial.println("updateDisplay()");
+    AVG_MM = sample_vlx();
+    PCT_FULL = map(AVG_MM, FULL_TANK_MM, EMPTY_TANK_MM, 1, 100); 
+    PCT_FULL = random(0, 100);
+    if(PCT_FULL < 0)
+        PCT_FULL = 0;
 
-    memset(BUFFER, 0, sizeof(BUFFER));
-    b.toCharArray(BUFFER, b.length() + 1);
-    Serial.println(BUFFER);
+    float GAL_REMAIN = TANK_GALLONS * (.01 * PCT_FULL);
+    
+    iteration = int(millis()/60000) % MAX_MEASUREMENTS;
+    Serial.printf("Uptime %is\n", int(millis()/1000));
 
+    //iteration++;
+    //iteration = iteration % MAX_MEASUREMENTS;
+
+    measurements[iteration] = AVG_MM;
+
+    // https://github.com/todd-herbert/heltec-eink-modules/blob/main/docs/README.md#drawline
+    // https://learn.adafruit.com/adafruit-gfx-graphics-library/graphics-primitives
     display.clearMemory();  // Start a new drawing
     display.landscape();
+    display.setTextColor(BLACK);
     display.setFont( &FreeSans9pt7b );
-    display.printCenter(BUFFER);
+
+// ------------------------ Percent Full Bar graph -----------------------------
+    b = String(GAL_REMAIN, 1) + " gal";
+    if(GAL_REMAIN < 1) {
+        b = " GET GAS!";
+    }
+    b.toCharArray(BUFFER, b.length() + 1);
+    display.setFont( &FreeSans9pt7b );
+
+    display.drawRect(0,0, bargraph_width, bargraph_height, WHITE);
+    display.drawRoundRect(0,0, bargraph_width, bargraph_height, radius, BLACK);
+
+    uint16_t w = map(PCT_FULL, 0, 100, offset, bargraph_width - offset);
+    uint16_t bx, by, bh, bw = 0;
+    text_width = display.getTextWidth(BUFFER);
+    text_height = display.getTextHeight(BUFFER);
+    bx = offset;
+    by = offset;
+    bh = bargraph_height - offset-offset;
+    bw = w;
+
+    display.fillRoundRect(bx, by, bw, bh, radius, BLACK);
+
+    if(bw > text_width) {
+        // the pct-full graph would fit the text, so left align the text in white
+        display.setCursor(bx, by + text_height);
+        display.setTextColor(WHITE);
+    } else {
+        // the pct-full graph is really low, so the text is too wide. Position the cursor just after the graph and print in Black
+        display.setCursor(bw - text_width - offset, by + text_height);
+        display.setTextColor(BLACK);
+    }
+    display.print(BUFFER); // eg "4.5 gal" or "GET GAS!"
+    
+    // ---- Print the range to the right of the PctFull graph --------
+    memset(BUFFER, 0, sizeof(BUFFER));
+    b = String(int(MPG_AVG * GAL_REMAIN)) + " mi";
+    b.toCharArray(BUFFER, b.length() + 1);
+    text_width = display.getTextWidth(BUFFER);
+    text_height = display.getTextHeight(BUFFER);
+    display.setTextColor(BLACK);
+    display.setCursor(DISPLAY_WIDTH - text_width - 10, text_height + 4 *offset);
+    display.print(BUFFER); // eg "127 mi"
+
+    // ---- Print the Ping Depth ----
+    b = String(AVG_MM, 0) + String("mm d=") + String(STD_DEV, 2) + " #" + String(iteration);
+    memset(BUFFER, 0, sizeof(BUFFER));
+    b.toCharArray(BUFFER, b.length() + 1);
+    text_width = display.getTextWidth(BUFFER);
+    text_height = display.getTextHeight(BUFFER);
+    display.setCursor(0, bargraph_height + text_height + (2*offset) );
+    display.print(BUFFER);
+
+    // --------------------- Line Graph ----------------------
+    uint from_y = DISPLAY_HEIGHT;
+    uint to_y = DISPLAY_HEIGHT * 0.66;
+    display.drawRect(
+        0, to_y, 
+        DISPLAY_WIDTH, DISPLAY_HEIGHT, 
+        BLACK
+    );
+    for(uint x = 0; x < MAX_MEASUREMENTS; x++) {
+        int y = map(measurements[x], 0, 255, 0, (from_y - to_y));
+        display.drawLine(x, from_y, x, from_y - y, BLACK);
+    }
+    b = "Tank";
+    b.toCharArray(BUFFER, b.length() + 1);
+    text_width = display.getTextWidth(BUFFER);
+    text_height = display.getTextHeight(BUFFER);
+    int half_width = (text_width /2);
+    int16_t  label_x = (DISPLAY_WIDTH/2) - half_width ;
+    int16_t  label_y = DISPLAY_HEIGHT - text_height;
+    display.setTextColor(BLACK);
+    display.fillRect(
+        label_x - offset, label_y + offset, 
+        text_width + offset*2, text_height + offset, 
+        WHITE
+    );
+
+    display.setCursor(label_x, label_y + text_height - offset);
+    display.print(BUFFER); //eg "Tank"
+
+
     display.update();
-    return sleep_time_seconds;
+    return 0;
 }
 
 void setup() {
@@ -94,75 +172,13 @@ void setup() {
     print_wakeup_reason();
     Wire.setPins(I2C_SDA, I2C_SCL);
     vlx.begin();
-    setupWiFi();
-    syncTime();
-}
-
-void original_setup() {
-    display.print("Hello, world!");
-    display.update();
-    
-    delay(4000);
-    display.clearMemory();  // Start a new drawing
-
-    display.landscape();
-    display.setFont( &FreeSans9pt7b );
-    display.printCenter("In the middle.");
-    display.update();
-
-    delay(4000);
-    display.clearMemory();  // Start a new drawing
-
-    display.setCursor(5, 20);   // Text Cursor - x:5 y:20
-    display.println("Here's a normal update.");
-    display.update();
-
-    delay(2000);    // Pause to read
-
-    display.fastmodeOn();
-    display.println("Here's fastmode,");
-    display.update();
-    display.println("aka Partial Refresh.");
-    display.update();
-
-    delay(2000);    // Pause to read
-    
-    display.fastmodeOff();
-    display.setFont( &FreeSansBold9pt7b );  // Change to bold font
-    display.println();
-    display.println("Don't use too often!");
-    display.update();
-
-    delay(4000);
-    display.clear();    // Physically clear the screen
-
-    display.fastmodeOn();
-    display.setFont( NULL ); // Default Font
-    display.printCenter("How about a dot?", 0, -40);   // 40px above center
-    display.update();
-
-    delay(2000);
-
-    display.fastmodeOff();
-    display.fillCircle(
-        display.centerX(),  // X: center screen
-        display.centerY(),  // Y: center screen
-        10,                             // Radius: 10px
-        BLACK                           // Color: black
-        );
-    display.update();
-
-    delay(2000);
-    
-    display.fillCircle(display.centerX(), display.centerY(), 5, WHITE);   // Draw a smaller white circle inside, giving a "ring" shape
-    display.update();
-
-    delay(10000);
-    display.clear();    // Physically clear the screen, ready for your next masterpiece
 }
 
 void loop() {
 //checkTimeAndSync();  // Check if 1 hour has passed and sync if necessary
-    pollData();
-    delay(30 * 1000);
+    // for(int i = 0; i < MAX_MEASUREMENTS; i++) {
+    //     measurements[i] = random(0, 255);
+    // }
+    updateDisplay();
+    delay(60 * 1000);
 }
