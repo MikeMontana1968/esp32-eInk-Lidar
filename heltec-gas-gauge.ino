@@ -13,15 +13,16 @@ https://github.com/todd-herbert/heltec-eink-modules/blob/main/docs/WirelessPaper
 #include <Wire.h>
 #include "Adafruit_VL6180X.h"
 #include <driver/adc.h>
+#include <Adafruit_GFX.h>    // Core graphics library
 
 #define I2C_SDA GPIO_NUM_39
 #define I2C_SCL GPIO_NUM_38
 
-#define VLX_SAMPLE_SIZE 100
+#define VLX_SAMPLE_SIZE 10
 #define MS_DELAY_PER_SAMPLE 25
 
 Adafruit_VL6180X vlx = Adafruit_VL6180X();
-#include <Adafruit_GFX.h>    // Core graphics library
+
 EInkDisplay_VisionMasterE290 display;
 ulong lastSyncMillis = 0;
 
@@ -29,8 +30,6 @@ const int FULL_TANK_MM = 30;
 const int EMPTY_TANK_MM = 220;
 const float TANK_GALLONS = 4.5;
 const int MPG_AVG = 40;
-
-
 char BUFFER[512] = {0};
 float STD_DEV = 0; // set in sample_vlx()
 float AVG_MM = 0; // set in updateDisplay()
@@ -42,6 +41,29 @@ RTC_DATA_ATTR int bootCount = 0;
 int iteration = 0;
 const int MAX_MEASUREMENTS = DISPLAY_WIDTH;
 uint measurements[MAX_MEASUREMENTS] = {0};
+
+bool startupDisplay() {
+    display.clearMemory();  // Start a new drawing
+    display.landscape();
+    display.setTextColor(BLACK);
+    display.setFont( &FreeSans9pt7b );
+    memset(BUFFER, 0, sizeof(BUFFER));
+    char szBuf[10] = {0};
+
+    dtostrf( TANK_GALLONS, 4, 2, szBuf );
+    display.setCursor(0, 20);
+    
+    int x  = sprintf(BUFFER    , "Ver:%s\n", __TIMESTAMP__);
+        x += sprintf(BUFFER + x, "Tank Size: %s gal, %dmpg\n", szBuf, MPG_AVG);
+        x += sprintf(BUFFER + x, "Full=%i mm, Empty<%i mm\n",  FULL_TANK_MM, EMPTY_TANK_MM);
+        x += sprintf(BUFFER + x, "VLX Sample Size %i, Delay: %ims\n",  VLX_SAMPLE_SIZE, MS_DELAY_PER_SAMPLE);
+        x += sprintf(BUFFER + x, "\nInit I2C & LiDAR...");
+    
+    display.print(BUFFER);
+    display.update();
+    delay(4000);
+    return true;
+}
 
 uint updateDisplay() {
     uint16_t text_width = 0;
@@ -119,7 +141,7 @@ uint updateDisplay() {
     display.print(BUFFER); // eg "127 mi"
 
     // ---- Print the Ping Depth ----
-    b = String(AVG_MM, 0) + String("mm d=") + String(STD_DEV, 2) + " #" + String(iteration);
+    b = "Iidar: " + String(AVG_MM, 0) + String("mm d=") + String(STD_DEV, 2) + " " + int(millis()/1000) + "s";
     memset(BUFFER, 0, sizeof(BUFFER));
     b.toCharArray(BUFFER, b.length() + 1);
     text_width = display.getTextWidth(BUFFER);
@@ -132,7 +154,7 @@ uint updateDisplay() {
     uint to_y = DISPLAY_HEIGHT * 0.66;
     display.drawRect(
         0, to_y, 
-        DISPLAY_WIDTH, DISPLAY_HEIGHT, 
+        DISPLAY_WIDTH, DISPLAY_HEIGHT-2, 
         BLACK
     );
     for(uint x = 0; x < MAX_MEASUREMENTS; x++) {
@@ -163,13 +185,16 @@ uint updateDisplay() {
 
 void setup() {
 	Serial.begin(115200);
-    delay(200);
+    
     Serial.print("Running ");
     Serial.print(" Version: ");
     Serial.println(__TIMESTAMP__);
     ++bootCount;
     Serial.println("Boot number: " + String(bootCount));
     print_wakeup_reason();
+
+    startupDisplay();
+    
     Wire.setPins(I2C_SDA, I2C_SCL);
     vlx.begin();
 }
@@ -180,5 +205,5 @@ void loop() {
     //     measurements[i] = random(0, 255);
     // }
     updateDisplay();
-    delay(60 * 1000);
+    delay(10 * 1000);
 }
