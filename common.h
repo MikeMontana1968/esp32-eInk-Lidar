@@ -209,3 +209,33 @@ void checkTimeAndSync() {
     syncTime();
   }
 }
+
+#define SEC2MINUTES 60
+#define SEC2HOURS 3600
+#define SEC2DAYS 86400UL
+
+void getUptime(char *ret_clk) {
+  byte days = 0;
+  byte hours = 0;
+  byte minutes = 0;
+  byte seconds = 0;
+  Serial.println("getUptime()");
+  unsigned long time_delta = millis() / 1000UL;
+
+  days = (int)(time_delta / SEC2DAYS);
+  hours = (int)((time_delta - days * SEC2DAYS) / SEC2HOURS);
+  minutes = (int)((time_delta - days * SEC2DAYS - hours * SEC2HOURS) / SEC2MINUTES);
+  seconds = (int)(time_delta - days * SEC2DAYS - hours * SEC2HOURS - minutes * SEC2MINUTES);
+
+  if(days > 2) {
+    sprintf(ret_clk, "%01di %02ih", days, hours);
+    return;
+  }
+
+  if(hours > 2) {
+    sprintf(ret_clk, "%02ih %02im", hours, minutes);
+    return;
+  }
+
+  sprintf(ret_clk, "%im %02is", minutes, seconds);
+}
