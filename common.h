@@ -220,18 +220,12 @@ void getUptime(char *result) {
     int minutes = seconds / 60;
     seconds %= 60;
 
-    if (days >= 2) {
-        sprintf(result, "%d%s %d%s", 
-                days, (days > 0 ? "d" : ""), 
-                hours, (hours > 1 ? "h" : ""));
-    } else if (hours >= 2) {
-        sprintf(result, "%d%s %d%s", 
-                hours, (hours > 0 ? "h" : ""), 
-                minutes, (minutes > 1 ? "m" : ""));
+    if (days >= 1) {
+        sprintf(result, "%dd %d%h", days, hours);
+    } else if (hours >= 1) {
+        sprintf(result, "%dh %dm", hours, minutes);
     } else {
-        sprintf(result, "%d%s %d%s", 
-                minutes, (minutes > 0 ? "m" : ""), 
-                seconds, (seconds > 1 ? "s" : ""));
+        sprintf(result, "%dm %ds", minutes, seconds);
     }
 
     Serial.printf("getUptime(%i) -> %s\n", millis() / 1000UL, result);
