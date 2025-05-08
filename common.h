@@ -210,32 +210,29 @@ void checkTimeAndSync() {
   }
 }
 
-#define SEC2MINUTES 60
-#define SEC2HOURS 3600
-#define SEC2DAYS 86400UL
+void getUptime(char *result) {
+    unsigned long seconds = millis() / 1000UL;
+     
+    int days = seconds / 86400; // 86400 seconds in a day
+    seconds %= 86400;
+    int hours = seconds / 3600; // 3600 seconds in an hour
+    seconds %= 3600;
+    int minutes = seconds / 60;
+    seconds %= 60;
 
-void getUptime(char *ret_clk) {
-  byte days = 0;
-  byte hours = 0;
-  byte minutes = 0;
-  byte seconds = 0;
-  Serial.println("getUptime()");
-  unsigned long time_delta = millis() / 1000UL;
+    if (days >= 2) {
+        sprintf(result, "%d%s %d%s", 
+                days, (days > 0 ? "d" : ""), 
+                hours, (hours > 1 ? "h" : ""));
+    } else if (hours >= 2) {
+        sprintf(result, "%d%s %d%s", 
+                hours, (hours > 0 ? "h" : ""), 
+                minutes, (minutes > 1 ? "m" : ""));
+    } else {
+        sprintf(result, "%d%s %d%s", 
+                minutes, (minutes > 0 ? "m" : ""), 
+                seconds, (seconds > 1 ? "s" : ""));
+    }
 
-  days = (int)(time_delta / SEC2DAYS);
-  hours = (int)((time_delta - days * SEC2DAYS) / SEC2HOURS);
-  minutes = (int)((time_delta - days * SEC2DAYS - hours * SEC2HOURS) / SEC2MINUTES);
-  seconds = (int)(time_delta - days * SEC2DAYS - hours * SEC2HOURS - minutes * SEC2MINUTES);
-
-  if(days > 2) {
-    sprintf(ret_clk, "%01di %02ih", days, hours);
-    return;
-  }
-
-  if(hours > 2) {
-    sprintf(ret_clk, "%02ih %02im", hours, minutes);
-    return;
-  }
-
-  sprintf(ret_clk, "%im %02is", minutes, seconds);
+    Serial.printf("getUptime(%i) -> %s\n", millis() / 1000UL, result);
 }

@@ -56,10 +56,10 @@ bool startupDisplay() {
     dtostrf( TANK_GALLONS, 4, 2, szBuf );
     display.setCursor(0, 20);
     
-    int x  = sprintf(BUFFER    , "Ver:'%s'\n", __TIMESTAMP__);
-        x += sprintf(BUFFER + x, "Tank Size: %s gal, %dmpg\n", szBuf, MPG_AVG);
-        x += sprintf(BUFFER + x, "Full > %i mm, Empty < %i mm\n",  FULL_TANK_MM, EMPTY_TANK_MM);
-        x += sprintf(BUFFER + x, "VLX: %i samples @ %ims\n",  VLX_SAMPLE_SIZE, MS_DELAY_PER_SAMPLE);        
+    int x  = sprintf(BUFFER    , " Ver: '%s'\n", __DATE__);
+        x += sprintf(BUFFER + x, "Tank: %s gal, %dmpg\n", szBuf, MPG_AVG);
+        x += sprintf(BUFFER + x, "Full: %i mm, Empty %i mm\n",  FULL_TANK_MM, EMPTY_TANK_MM);
+        x += sprintf(BUFFER + x, " VLX: %i samples @ %ims\n",  VLX_SAMPLE_SIZE, MS_DELAY_PER_SAMPLE);        
         x += sprintf(BUFFER + x, "Screen Updates: %is\n", UPDATE_REFRESH_SEC);
     
     display.print(BUFFER);
@@ -122,7 +122,7 @@ uint updateDisplay() {
 
     if(bw > text_width) {
         // the pct-full graph would fit the text, so left align the text in white
-        display.setCursor(bx, by + text_height * 1.5);
+        display.setCursor(bx + 15, by + text_height * 1.5);
         display.setTextColor(WHITE);
     } else {
         // the pct-full graph is really low, so the text is too wide. Position the cursor just after the graph and print in Black
@@ -139,14 +139,14 @@ uint updateDisplay() {
     text_width = display.getTextWidth(BUFFER);
     text_height = display.getTextHeight(BUFFER);
     display.setTextColor(BLACK);
-    display.setCursor(DISPLAY_WIDTH - text_width - 10, text_height *1.5);
+    display.setCursor(DISPLAY_WIDTH - text_width - 6, text_height *1.5);
     display.print(BUFFER); // eg "127 mi"
 
     // ---- Print the LIDAR... Ping Depth ----    
     display.setFont( &FreeSans9pt7b );
     memset(szTemp, sizeof(szTemp), 0);
     getUptime(szTemp); 
-    b  =  "Lidar: " + String(AVG_MM, 0) + String("mm d=") + String(STD_DEV, 1) + " On " + szTemp;
+    b  =  "Lidar: " + String(AVG_MM, 0) + String("mm (d=") + String(STD_DEV, 1) + ") Up " + szTemp;
 
     memset(BUFFER, 0, sizeof(BUFFER));
     b.toCharArray(BUFFER, b.length() + 1);
@@ -156,17 +156,12 @@ uint updateDisplay() {
     display.print(BUFFER);
 
     // --------------------- Line Graph ----------------------
-    uint from_y = DISPLAY_HEIGHT;
-    uint to_y = DISPLAY_HEIGHT * 0.66;
-    // display.drawRect(
-    //     0, to_y, 
-    //     DISPLAY_WIDTH, DISPLAY_HEIGHT-2, 
-    //     BLACK
-    // );
+    
+    uint graph_top = DISPLAY_HEIGHT * 0.66;
+
     for(uint x = 0; x < MAX_MEASUREMENTS; x++) {
-        // map(value, fromLow, fromHigh, toLow, toHigh)
-        int y = map(measurements[x], FULL_TANK_MM, EMPTY_TANK_MM, DISPLAY_HEIGHT, to_y);
-        display.drawLine(x, from_y, x, y, BLACK);
+        int y = map(measurements[x], FULL_TANK_MM, EMPTY_TANK_MM, DISPLAY_HEIGHT, graph_top); // map(value, fromLow, fromHigh, toLow, toHigh)
+        display.drawLine(x, DISPLAY_HEIGHT, x, y, BLACK);
     }
     b = "Tank";
     b.toCharArray(BUFFER, b.length() + 1);
@@ -185,7 +180,11 @@ uint updateDisplay() {
     display.setCursor(label_x, label_y + text_height - offset);
     display.print(BUFFER); //eg "Tank"
 
-
+    display.drawRect(
+        0, graph_top, 
+        DISPLAY_WIDTH, DISPLAY_HEIGHT-80, 
+        BLACK
+    );
     display.update();
     return 0;
 }
@@ -206,7 +205,8 @@ void setup() {
     vlx.begin();
 
     // for(int i = 0; i < MAX_MEASUREMENTS; i++) {
-    //     measurements[i] = random(0, 255);
+    //     //measurements[i] = random(0, 255);
+    //     measurements[i] = i;
     // }
 }
 
