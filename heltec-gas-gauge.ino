@@ -8,55 +8,43 @@ https://github.com/todd-herbert/heltec-eink-modules/blob/main/docs/WirelessPaper
 #include "Fonts/FreeSans9pt7b.h"
 #include "Fonts/FreeSansBold9pt7b.h"
 #include "Fonts/FreeSansBold12pt7b.h"
-#include <WiFi.h>
-#include <time.h>
-#include <ArduinoSort.h> // https://github.com/emilv/ArduinoSort/blob/master/examples/SortArray/SortArray.ino
+#include "Fonts/FreeMono9pt7b.h"
+
 #include <Wire.h>
 #include "Adafruit_VL6180X.h"
 #include <driver/adc.h>
 #include <Adafruit_GFX.h>    // Core graphics library
-
-#define I2C_SDA GPIO_NUM_39
-#define I2C_SCL GPIO_NUM_38
-
-#define VLX_SAMPLE_SIZE 100
-#define MS_DELAY_PER_SAMPLE 25
+#include "setup.h" // Tank size, refresh rates etc
 
 Adafruit_VL6180X vlx = Adafruit_VL6180X();
-
 EInkDisplay_VisionMasterE290 display;
-ulong lastSyncMillis = 0;
 
-const int FULL_TANK_MM = 15;
-const int EMPTY_TANK_MM = (7 * 25.4);
-const float TANK_GALLONS = 4.5;
-const int MPG_AVG = 40;
-const int UPDATE_REFRESH_SEC = 60;
+char    BUFFER[512] = {0};
+float   STD_DEV = 0; // set in sample_vlx()
+float   AVG_MM = 0; // set in updateDisplay()
+int     PCT_FULL = 0;   // updateDisplay()
+float   GAL_REMAIN = 0;   // updateDisplay
+int     iteration = 0;
+const int MAX_MEASUREMENTS = DISPLAY_WIDTH;
+uint    measurements[MAX_MEASUREMENTS] = {0};
 
-char BUFFER[512] = {0};
-float STD_DEV = 0; // set in sample_vlx()
-float AVG_MM = 0; // set in updateDisplay()
-int PCT_FULL = 0;   // updateDisplay()
-float GAL_REMAIN = 0;   // updateDisplay
 RTC_DATA_ATTR int bootCount = 0;
 
 #include "common.h"
-int iteration = 0;
-const int MAX_MEASUREMENTS = DISPLAY_WIDTH;
-uint measurements[MAX_MEASUREMENTS] = {0};
 
 bool startupDisplay() {
     display.clearMemory();  // Start a new drawing
     display.landscape();
     display.setTextColor(BLACK);
-    display.setFont( &FreeSans9pt7b );
+    display.setFont( &FreeMono9pt7b );
     memset(BUFFER, 0, sizeof(BUFFER));
     char szBuf[10] = {0};
 
     dtostrf( TANK_GALLONS, 4, 2, szBuf );
     display.setCursor(0, 20);
     
-    int x  = sprintf(BUFFER    , " Ver: '%s'\n", __DATE__);
+    int x  = sprintf(BUFFER    , "%s\n", TITLE);
+        x += sprintf(BUFFER + x, " Ver: %s\n", __DATE__);
         x += sprintf(BUFFER + x, "Tank: %s gal, %dmpg\n", szBuf, MPG_AVG);
         x += sprintf(BUFFER + x, "Full: %i mm, Empty %i mm\n",  FULL_TANK_MM, EMPTY_TANK_MM);
         x += sprintf(BUFFER + x, " VLX: %i samples @ %ims\n",  VLX_SAMPLE_SIZE, MS_DELAY_PER_SAMPLE);        
@@ -76,7 +64,7 @@ uint updateDisplay() {
     uint16_t bargraph_width = 225;
     uint16_t offset = 1;
     String b = "";
-    Serial.println("updateDisplay()");
+    Serial.println("\n\nupdateDisplay()");
     AVG_MM = sample_vlx();
     PCT_FULL = map(AVG_MM, FULL_TANK_MM, EMPTY_TANK_MM, 1, 100); 
     //PCT_FULL = random(0, 100);
@@ -122,7 +110,7 @@ uint updateDisplay() {
 
     if(bw > text_width) {
         // the pct-full graph would fit the text, so left align the text in white
-        display.setCursor(bx + 15, by + text_height * 1.5);
+        display.setCursor(bx + 4, by + text_height * 1.5);
         display.setTextColor(WHITE);
     } else {
         // the pct-full graph is really low, so the text is too wide. Position the cursor just after the graph and print in Black
@@ -163,6 +151,7 @@ uint updateDisplay() {
         int y = map(measurements[x], FULL_TANK_MM, EMPTY_TANK_MM, DISPLAY_HEIGHT, graph_top); // map(value, fromLow, fromHigh, toLow, toHigh)
         display.drawLine(x, DISPLAY_HEIGHT, x, y, BLACK);
     }
+    
     b = "Tank";
     b.toCharArray(BUFFER, b.length() + 1);
     text_width = display.getTextWidth(BUFFER);
@@ -177,12 +166,12 @@ uint updateDisplay() {
         WHITE
     );
 
-    display.setCursor(label_x, label_y + text_height - offset);
+    display.setCursor(label_x, label_y + text_height - offset*3);
     display.print(BUFFER); //eg "Tank"
 
     display.drawRect(
         0, graph_top, 
-        DISPLAY_WIDTH, DISPLAY_HEIGHT-80, 
+        DISPLAY_WIDTH, DISPLAY_HEIGHT - graph_top, 
         BLACK
     );
     display.update();
@@ -191,19 +180,14 @@ uint updateDisplay() {
 
 void setup() {
 	Serial.begin(115200);
-    
     Serial.print("Running ");
     Serial.print(" Version: ");
     Serial.println(__TIMESTAMP__);
     ++bootCount;
     Serial.println("Boot number: " + String(bootCount));
-    print_wakeup_reason();
-
     startupDisplay();
-    
     Wire.setPins(I2C_SDA, I2C_SCL);
     vlx.begin();
-
     // for(int i = 0; i < MAX_MEASUREMENTS; i++) {
     //     //measurements[i] = random(0, 255);
     //     measurements[i] = i;
@@ -211,8 +195,7 @@ void setup() {
 }
 
 void loop() {
-//checkTimeAndSync();  // Check if 1 hour has passed and sync if necessary
-
+    //checkTimeAndSync();  // Check if 1 hour has passed and sync if necessary
     updateDisplay();
     delay(UPDATE_REFRESH_SEC * 1000);
 }

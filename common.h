@@ -1,30 +1,7 @@
 extern float STD_DEV;
 extern float AVG_MM;
 extern Adafruit_VL6180X vlx;
-
-#include ".credentials.h"
-
-struct tm timeinfo;
-
-// NTP server details
-const char* ntpServer = "pool.ntp.org";
-const long gmtOffset_sec = 0;  // Offset for GMT in seconds
-const int daylightOffset_sec = -4 * 60 * 60;  // Daylight savings time in seconds
-
-// void drawBorder(uint x, uint y, uint w, uint h, uint thickness = 4, uint color = BLACK) {
-//   for(uint i = thickness; i > 0; i--){
-//     display.drawRect(x, y, w, h, color);
-//     x++; y++; w-=2; h-=2;
-//   }
-// }
-// void user_interactive_config() {
-//     paint("CONFIG");
-//     // rtc.setTime(input_long("Enter current unix epoch:"));
-//     // rtc.offset = -4 * 60;
-//     FULL_TANK_MM = input_long("Enter Tank depth in mm (eg 127)");
-//     EMPTY_TANK_MM = input_long("Enter mm to full-line of tank in mm (eg 10)");
-//     TANK_GALLONS = input_float("Enter tank capacity in gallons (eg 3)");
-// }
+#include <ArduinoSort.h> // https://github.com/emilv/ArduinoSort/blob/master/examples/SortArray/SortArray.ino
 
 float getMean(uint8_t* val, int arrayCount) {
   long total = 0;
@@ -54,24 +31,6 @@ float getStdDev(uint8_t* val, int arrayCount) {
     stdDev = sqrt(variance);
   //Serial.print("getStdDev([], " + String(arrayCount) + ")=" + String(stdDev,2) + "\n");
   return stdDev;
-}
-
-long input_long(String prompt) {
-    Serial.println(prompt);
-    while (Serial.available()) {
-      Serial.read();
-    }
-    while(Serial.available() == 0){}
-    return Serial.parseInt();
-}
-
-long input_float(String prompt) {
-    Serial.println(prompt);
-    while (Serial.available()) {
-      Serial.read();
-    }
-    while(Serial.available() == 0){}
-    return Serial.parseFloat();
 }
 
 float read_lux() {
@@ -149,70 +108,9 @@ float sample_vlx(uint sample_size = VLX_SAMPLE_SIZE, uint delay_ms_per_sample = 
   return avg;
 }
 
-esp_sleep_wakeup_cause_t print_wakeup_reason(){
-  esp_sleep_wakeup_cause_t wakeup_reason;
-
-  wakeup_reason = esp_sleep_get_wakeup_cause();
-
-  switch(wakeup_reason)
-  {
-    case ESP_SLEEP_WAKEUP_EXT0 : Serial.println("Wakeup caused by external signal using RTC_IO"); break;
-    case ESP_SLEEP_WAKEUP_EXT1 : Serial.println("Wakeup caused by external signal using RTC_CNTL"); break;
-    case ESP_SLEEP_WAKEUP_TIMER : Serial.println("Wakeup caused by timer"); break;
-    case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println("Wakeup caused by touchpad"); break;
-    case ESP_SLEEP_WAKEUP_ULP : Serial.println("Wakeup caused by ULP program"); break;
-    default : 
-      Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); 
-      break;
-  }
-  return wakeup_reason;
-}
-
-void setupWiFi() {
-    WiFi.begin(ssid, password);  // Connect to WiFi
-    uint attempts = 20;
-    Serial.printf("setupWiFi(ssid='%s', password='%s') upto %i connect-attempts\n", ssid, password, attempts);    
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-        attempts--;
-        if(attempts < 1) {
-          Serial.println("\nWIFI NOT REACHABLE");
-          return;
-        }
-    }
-    Serial.println("WiFi connected.");
-}
-
-void syncTime() {
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);  // Configure time with NTP server
-  if (!getLocalTime(&timeinfo)) {
-    Serial.println("Failed to obtain time");
-    return;
-  }
-  Serial.println("\nESP32 Time synchronized with NTP server.");
-  Serial.print("Current time: ");
-  Serial.println(&timeinfo, "%A, %B %d %Y %H:%M:%S");
-
-
-    // disconnect WiFi
-    WiFi.disconnect(true);
-    WiFi.mode(WIFI_OFF);
-
-  lastSyncMillis = millis();  // Record the last sync time in milliseconds
-}
-
-void checkTimeAndSync() {
-  // Check if 1 hour has passed since the last sync (1 hour = 3600000 milliseconds)
-  if (millis() - lastSyncMillis >= 3600000) {
-    Serial.println("Synchronizing time with NTP...");
-    syncTime();
-  }
-}
-
 void getUptime(char *result) {
     unsigned long seconds = millis() / 1000UL;
-     
+    //seconds += 3600;
     int days = seconds / 86400; // 86400 seconds in a day
     seconds %= 86400;
     int hours = seconds / 3600; // 3600 seconds in an hour
