@@ -3,34 +3,34 @@ Set Board Type to: Vision Master E290
 https://github.com/todd-herbert/heltec-eink-modules/blob/main/docs/WirelessPaper/wireless_paper.md
 
 */
+#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 
-#include "setup.h" // Tank size, refresh rates etc
-#include "task.h"
-#include "vlx_sampler.h"
-#include "eink_display.h"
+#include "vlx_sampler.cpp"
+#include "eink_display.cpp"
 
+#define TAG_MAIN "main"
 VlxTask *vlxTask;
 EinkDisplayTask *einkTask;
-
+	// esp_log_level_set("*", ESP_LOG_NONE);					//<<<Default logging level for all tags
+	// esp_log_level_set("OneOfMyTagNames", ESP_LOG_VERBOSE);
+	// esp_log_level_set("AnotherOfMyTagNames", ESP_LOG_WARN);
 void setup() {
+    ESP_LOGE(TAG_MAIN, "Setup!");
 	Serial.begin(115200);
     Serial.print("Running ");
     Serial.print(" Version: ");
-    Serial.println(__TIMESTAMP__);
+    Serial.println(TAG_MAIN);
     delay(100);
-    
 
-
-    Serial.println("Allocate Tasks"); delay(50);
         vlxTask = new VlxTask();
-        einkTask = new EinkDisplayTask();
-        
-    Serial.println("Start Task VLX"); delay(50);  vlxTask->start();
-    Serial.println("Start Task eInk"); delay(50); einkTask->start();
-    Serial.println("Setup Complete");
+        einkTask = new EinkDisplayTask(vlxTask);
+
+    vlxTask->start();
+    einkTask->start();
+    ESP_LOGE(TAG_MAIN,"Setup Complete");
 }
 
 void loop() {
-    Serial.println("loop()");
-    delay(2 * 1000);
+    ESP_LOGV(TAG_MAIN, ".");
+    vTaskDelay(10000 / portTICK_PERIOD_MS);
 }

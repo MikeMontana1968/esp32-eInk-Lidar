@@ -1,11 +1,12 @@
 #pragma once
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "esp_log.h"
+
 // https://saludpcb.com/learn-c-inheritance-with-esp32-powerful-task-setup/
-class Task {
+
+class MyTask {
 public:
-    Task(const char* name, uint32_t stackSize, UBaseType_t priority)
+    MyTask(const char* name, uint32_t stackSize, UBaseType_t priority)
         : taskName(name), taskStackSize(stackSize), taskPriority(priority), taskHandle(nullptr) {}
 
     void start() {
@@ -17,7 +18,7 @@ protected:
 
 private:
     static void taskFunctionWrapper(void* parameter) {
-        Task* task = static_cast<Task*>(parameter);
+        MyTask* task = static_cast<MyTask*>(parameter);
         task->run();
     }
 
