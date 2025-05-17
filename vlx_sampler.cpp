@@ -59,13 +59,21 @@ public:
             }
     }
     void getUpdate(vlx_state* state) {
-        state->avg_lidar_mm = avg_lidar_mm;
-        state->std_dev = std_dev;
-        state->seconds_index = seconds_index;
-        state->last_update = last_update;
-        for(int i = 0; i < RING_BUFFER_SIZE; i++) {
-          state->measurements[i] = measurements[i];        
+      ESP_LOGI(TAG_VLX, "Begin");
+        SemaphoreHandle_t mutex = xSemaphoreCreateMutex();
+        {
+            xSemaphoreTake(mutex, portMAX_DELAY); // enter critical section
+              state->avg_lidar_mm = avg_lidar_mm;
+              state->std_dev = std_dev;
+              state->seconds_index = seconds_index;
+              state->last_update = last_update;
+              for(int i = 0; i < RING_BUFFER_SIZE; i++) {
+                state->measurements[i] = measurements[i];        
+              }
+            xSemaphoreGive(mutex); // exit critical section
         }
+        vSemaphoreDelete(mutex);
+      ESP_LOGI(TAG_VLX, "End");
     }
 
     uint getMeasurementCount() {
@@ -110,22 +118,6 @@ protected:
         }
     }
 
-    void mutex_update(float avg, float std) {
-        ESP_LOGI(TAG_VLX, "Begin");
-        SemaphoreHandle_t mutex = xSemaphoreCreateMutex();
-        {
-            xSemaphoreTake(mutex, portMAX_DELAY); // enter critical section
-              avg_lidar_mm = avg;
-              seconds_index = int(millis()/60000) % RING_BUFFER_SIZE;
-              std_dev = std;
-              last_update = millis();
-              measurements[seconds_index] = avg;
-            xSemaphoreGive(mutex); // exit critical section
-        }
-        vSemaphoreDelete(mutex);
-      ESP_LOGI(TAG_VLX, "End");
-    }
-
     float read_lux() {
       float lux = vlx.readLux(VL6180X_ALS_GAIN_5);
       //Serial.print("Lux: "); Serial.println(lux);
@@ -141,7 +133,8 @@ protected:
       }
 
       // Some error occurred, print it out!
-      mutex_update(-1, -1);
+      avg_lidar_mm = -1;
+      std_dev = -1;
       if  ((status >= VL6180X_ERROR_SYSERR_1) && (status <= VL6180X_ERROR_SYSERR_5)) {
         Serial.println("System error");
       }
@@ -183,13 +176,14 @@ protected:
         delay(ms_delay_per_sample_read);
       }
 
-      float std = getStdDev(vlx_samples, vlx_sample_reads);
-      float avg = getMean(vlx_samples, vlx_sample_reads);
-      mutex_update(avg, std);
-      String b = String("Samples: " + String(vlx_sample_reads) + " Avg: " + String(avg,1) + " " + String(millis() - start));
+      std_dev = getStdDev(vlx_samples, vlx_sample_reads);
+      avg_lidar_mm = getMean(vlx_samples, vlx_sample_reads);
+      last_update = millis();
+      measurements[seconds_index] = avg_lidar_mm;
+      String b = String("Samples: " + String(vlx_sample_reads) + " Avg: " + String(avg_lidar_mm,1) + " " + String(millis() - start)) + "ms";
       char buf[128] = {0};
       b.toCharArray(buf, b.length() + 1);
       ESP_LOGI(TAG_VLX, "%s", buf);
-      return avg;
+      return avg_lidar_mm;
     }
 };
