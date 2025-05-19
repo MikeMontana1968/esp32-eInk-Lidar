@@ -7,7 +7,8 @@ https://github.com/todd-herbert/heltec-eink-modules/blob/main/docs/WirelessPaper
 
 #include "vlx_sampler.cpp"
 #include "eink_display.cpp"
-
+#define I2C_SDA GPIO_NUM_39
+#define I2C_SCL GPIO_NUM_38
 #define TAG_MAIN "main"
 VlxTask *vlxTask;
 EinkDisplayTask *einkTask;
@@ -22,8 +23,8 @@ void setup() {
     Serial.println(TAG_MAIN);
     delay(100);
 
-        vlxTask = new VlxTask();
-        einkTask = new EinkDisplayTask(vlxTask);
+        vlxTask = new VlxTask(I2C_SDA, I2C_SCL);
+        einkTask = new EinkDisplayTask(I2C_SDA, I2C_SCL, vlxTask);
 
     vlxTask->start();
     einkTask->start();

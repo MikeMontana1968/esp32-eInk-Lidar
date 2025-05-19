@@ -20,29 +20,31 @@ typedef struct vlx_state {
   uint32_t last_update;
 } vlx_state;
 
-#define I2C_SDA GPIO_NUM_39
-#define I2C_SCL GPIO_NUM_38
+
 
 class VlxTask : public MyTask {
   private:
     Adafruit_VL6180X  vlx = Adafruit_VL6180X();
     const     int     vlx_sample_reads = 0;
     const     int     ms_delay_per_sample_read = 0;
-    std::atomic<float>   avg_lidar_mm ;
-    std::atomic<float>   std_dev;
-    std::atomic<uint>    seconds_index;
-    std::atomic<uint>    measurements[RING_BUFFER_SIZE];
-    uint32_t last_update = 0;
+    float     avg_lidar_mm ;
+    float     std_dev;
+    uint      seconds_index;
+    uint      measurements[RING_BUFFER_SIZE];
+    uint32_t last_update = 0;    
 public:
     VlxTask(
-      bool initialize_with_random_data = false, 
-      uint _vlx_sample_reads = 100, 
-      uint _ms_delay_per_sample_read = 10 ) : 
+            gpio_num_t i2c_sda_pin,
+            gpio_num_t i2c_slc_pin,
+            bool initialize_with_random_data = false, 
+            uint _vlx_sample_reads = 100, 
+            uint _ms_delay_per_sample_read = 10 
+          ): 
               MyTask(TAG_VLX, 4096, 3), 
               vlx_sample_reads(_vlx_sample_reads),  
               ms_delay_per_sample_read(_ms_delay_per_sample_read) 
           {
-            Wire.setPins(I2C_SDA, I2C_SCL);
+            Wire.setPins(i2c_sda_pin, i2c_slc_pin);
             vlx.begin();
             if(initialize_with_random_data) {
               for(int i = 0; i < RING_BUFFER_SIZE; i++) {

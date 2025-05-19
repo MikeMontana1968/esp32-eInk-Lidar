@@ -15,8 +15,7 @@
 #include <driver/adc.h>
 
 #include <Adafruit_GFX.h>    // Core graphics library
-#define I2C_SDA GPIO_NUM_39
-#define I2C_SCL GPIO_NUM_38
+
 #define TAG_EINK "eink"
 
 class EinkDisplayTask : public MyTask {
@@ -45,7 +44,16 @@ class EinkDisplayTask : public MyTask {
     char sLidarUptime[80] = {0};
     vlx_state data= {0};
 public:
-    EinkDisplayTask(VlxTask* _VlxTask, uint _mmFullTank = 10, uint _mmEmptyTank = 152, float _galCapacity = 4.5, int _mpgAvg = 40, int _secRefresh = 30) : 
+    EinkDisplayTask(                
+                gpio_num_t i2c_sda_pin,
+                gpio_num_t i2c_slc_pin, 
+                VlxTask* _VlxTask, 
+                uint _mmFullTank = 10, 
+                uint _mmEmptyTank = 152, 
+                float _galCapacity = 4.5, 
+                int _mpgAvg = 40, 
+                int _secRefresh = 30
+            ) : 
             MyTask(TAG_EINK, 2048, 3), 
             nBlink(0), 
             vlxTask(_VlxTask), 
@@ -55,15 +63,12 @@ public:
             galCapacity(_galCapacity),
             secRefresh(_secRefresh) 
         {
-        Wire.setPins(I2C_SDA, I2C_SCL);
-        
+        Wire.setPins(i2c_sda_pin, i2c_slc_pin);
         ESP_LOGI(TAG_EINK, "Full %dmm Empty %dmm", _mmFullTank, _mmEmptyTank);
-
     }
 
     void getUptime(char *result) {
         unsigned long seconds = millis() / 1000UL;
-        //seconds += 3600;
         int days = seconds / 86400; // 86400 seconds in a day
         seconds %= 86400;
         int hours = seconds / 3600; // 3600 seconds in an hour
