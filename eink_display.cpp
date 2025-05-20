@@ -65,6 +65,7 @@ public:
         {
         Wire.setPins(i2c_sda_pin, i2c_slc_pin);
         ESP_LOGI(TAG_EINK, "Full %dmm Empty %dmm", _mmFullTank, _mmEmptyTank);
+        ESP_LOGI(TAG_EINK,"Constructor Complete");
     }
 
     void getUptime(char *result) {
@@ -89,7 +90,6 @@ public:
 
     void read_lidar_values() {
        vlxTask->getUpdate(&data);
-
         // SemaphoreHandle_t mutex = xSemaphoreCreateMutex();
         // {
         //     xSemaphoreTake(mutex, portMAX_DELAY); // enter critical section
@@ -127,7 +127,13 @@ public:
 
         memset(szTemp, sizeof(szTemp), 0);
         getUptime(szTemp); 
-        b  =  "Lidar: " + String(data.avg_lidar_mm, 0) + String("mm (d=") + String(data.std_dev, 1) + ") Up " + szTemp;
+
+        if(strlen(data.error_message)) {
+            b = String(data.error_message) + " " + szTemp;
+        } else {
+            b  =  "Lidar: " + String(data.avg_lidar_mm, 0) + String("mm (d=") + String(data.std_dev, 1) + ") Up " + szTemp;
+        }
+        
         memset(sLidarUptime, sizeof(sLidarUptime), 0);
         b.toCharArray(sLidarUptime, b.length() + 1);
 
@@ -220,22 +226,22 @@ public:
         display.print(buf); 
         
         // Erase two vertival bars to the right of the current 'seconds'
-        display.fillRect(
-            data.seconds_index+1, graph_top,
-            data.seconds_index+3, DISPLAY_HEIGHT - graph_top, 
-            WHITE
-        );
+        // display.fillRect(
+        //     data.current_index+1, graph_top,
+        //     data.current_index+3, DISPLAY_HEIGHT - graph_top, 
+        //     WHITE
+        // );
         //Draw an arrow atop the history
         for(int lazy = 8; lazy > 0; lazy--) {
             display.drawLine(
-                data.seconds_index-lazy, graph_top-lazy,
-                data.seconds_index+lazy, graph_top-lazy,
+                data.current_index-lazy, graph_top-lazy,
+                data.current_index+lazy, graph_top-lazy,
                 BLACK
             );
         }
         display.drawLine(
-            data.seconds_index-2, graph_top-2,
-            data.seconds_index+2, graph_top-2, 
+            data.current_index-2, graph_top-2,
+            data.current_index+2, graph_top-2, 
             BLACK
         );
 
@@ -251,8 +257,11 @@ public:
         display.clearMemory();  // Start a new drawing
         display.landscape();
         display.setTextColor(BLACK);
-        display.setFont( &FreeMono9pt7b );        
-        display.printCenter("Not getting Sensor Data!");
+        display.setFont( &FreeMono9pt7b );
+        if(strlen(data.error_message))
+            display.printCenter(data.error_message);
+        else
+            display.printCenter("Not getting Sensor Data!");
         display.update();
         delay(5000);
     }
@@ -284,7 +293,7 @@ protected:
         splashScreen();
         while (true) {
             updateDisplay();
-            vTaskDelay(10 * 1000 / portTICK_PERIOD_MS);  // Delay for 1 second
+            vTaskDelay(secRefresh * 1000 / portTICK_PERIOD_MS);
         }
     }
 };

@@ -1,37 +1,37 @@
 #pragma once
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-
 #include "string.h"
 #include "MyTask.cpp"
 #include <Wire.h>
 #include <driver/adc.h>
-#include <atomic>
 #include "Adafruit_VL6180X.h"
-#define TAG_VLX "vlx"
 
+#define TAG_VLX "vlx"
 #define RING_BUFFER_SIZE 200
+
 typedef struct vlx_state {
+  uint32_t last_update;
   float avg_lidar_mm;
   float std_dev;
-  uint  seconds_index;
+  uint  current_index;
   uint  measurement_count = RING_BUFFER_SIZE;
   uint  measurements[RING_BUFFER_SIZE];
-  uint32_t last_update;
+  char  error_message[RING_BUFFER_SIZE];
 } vlx_state;
-
-
 
 class VlxTask : public MyTask {
   private:
-    Adafruit_VL6180X  vlx = Adafruit_VL6180X();
-    const     int     vlx_sample_reads = 0;
-    const     int     ms_delay_per_sample_read = 0;
-    float     avg_lidar_mm ;
-    float     std_dev;
-    uint      seconds_index;
-    uint      measurements[RING_BUFFER_SIZE];
-    uint32_t last_update = 0;    
+    Adafruit_VL6180X    vlx                       = Adafruit_VL6180X();
+    const     int       vlx_sample_reads          = 0;
+    const     int       ms_delay_per_sample_read  = 0;
+              float     avg_lidar_mm              = 0.0;
+              float     std_dev                   = 0.0;
+              uint      current_index             = 0;
+              uint      measurements[RING_BUFFER_SIZE] = {0};
+              uint32_t  last_update               = 0;    
+              char      buf[64]                   = {0};
+              char      error_message[RING_BUFFER_SIZE] = {0};
 public:
     VlxTask(
             gpio_num_t i2c_sda_pin,
@@ -59,23 +59,26 @@ public:
               avg_lidar_mm = -1;
               std_dev = 0.0;
             }
-    }
+            ESP_LOGI(TAG_VLX,"Constructor Complete");
+          }
+
     void getUpdate(vlx_state* state) {
-      ESP_LOGI(TAG_VLX, "Begin");
+      ESP_LOGV(TAG_VLX, "Begin");
         SemaphoreHandle_t mutex = xSemaphoreCreateMutex();
         {
             xSemaphoreTake(mutex, portMAX_DELAY); // enter critical section
               state->avg_lidar_mm = avg_lidar_mm;
               state->std_dev = std_dev;
-              state->seconds_index = seconds_index;
+              state->current_index = current_index;
               state->last_update = last_update;
               for(int i = 0; i < RING_BUFFER_SIZE; i++) {
                 state->measurements[i] = measurements[i];        
-              }
+              }              
+              strcpy(state->error_message, error_message);
             xSemaphoreGive(mutex); // exit critical section
         }
         vSemaphoreDelete(mutex);
-      ESP_LOGI(TAG_VLX, "End");
+      ESP_LOGV(TAG_VLX, "End");
     }
 
     uint getMeasurementCount() {
@@ -115,77 +118,79 @@ protected:
 
     void run() override {
         while (true) {            
-            sample_vlx();
+            getSampleSet();
             vTaskDelay(1013 / portTICK_PERIOD_MS);  // Delay for 1 second
         }
     }
 
-    float read_lux() {
+    float getLuxReading() {
       float lux = vlx.readLux(VL6180X_ALS_GAIN_5);
-      //Serial.print("Lux: "); Serial.println(lux);
+      //Serial.print("Lux: "); ESP_LOGI(TAG_VLX, lux);
       return lux;
     }
 
-    uint8_t read_vlx() {
+    uint8_t getDistanceReading() {
       uint8_t range = vlx.readRange();
-      uint8_t status = vlx.readRangeStatus();
-
+      uint8_t status = vlx.readRangeStatus();      
       if (status == VL6180X_ERROR_NONE) {
         return range;
       }
-
-      // Some error occurred, print it out!
       avg_lidar_mm = -1;
       std_dev = -1;
+      
+
       if  ((status >= VL6180X_ERROR_SYSERR_1) && (status <= VL6180X_ERROR_SYSERR_5)) {
-        Serial.println("System error");
+        strcpy(error_message, "System error");
       }
       else if (status == VL6180X_ERROR_ECEFAIL) {
-        Serial.println("ECE failure");
+        strcpy(error_message,  "ECE failure");
       }
       else if (status == VL6180X_ERROR_NOCONVERGE) {
-        Serial.println("No convergence");
+        strcpy(error_message,  "No convergence");
       }
       else if (status == VL6180X_ERROR_RANGEIGNORE) {
-        Serial.println("Ignoring range");
+        strcpy(error_message,  "Ignoring range");
       }
       else if (status == VL6180X_ERROR_SNR) {
-        Serial.println("Signal/Noise error");
+        strcpy(error_message,  "Signal/Noise error");
       }
       else if (status == VL6180X_ERROR_RAWUFLOW) {
-        Serial.println("Raw reading underflow");
+        strcpy(error_message,  "Raw reading underflow");
       }
       else if (status == VL6180X_ERROR_RAWOFLOW) {
-        Serial.println("Raw reading overflow");
+        strcpy(error_message,  "Raw reading overflow");
       }
       else if (status == VL6180X_ERROR_RANGEUFLOW) {
-        Serial.println("Range reading underflow");
+        strcpy(error_message,  "Range reading underflow");
       }
       else if (status == VL6180X_ERROR_RANGEOFLOW) {
-        Serial.println("Range reading overflow");
+        strcpy(error_message, "Range reading overflow");
       }
-
+      ESP_LOGE(TAG_VLX, "--> %s", error_message);
       return 0;
     }
 
-    float sample_vlx() {
+    float getSampleSet() {
       ulong start = millis();
       uint8_t vlx_samples[vlx_sample_reads+1];
-      memset(vlx_samples, sizeof(vlx_samples), 0);
-      uint8_t offset = int(vlx_sample_reads * 0.20);
+      memset(error_message, 0, sizeof(error_message));
+      memset(vlx_samples, 0, sizeof(vlx_samples));
       for(int i =0; i < vlx_sample_reads; i++) {
-        vlx_samples[i] = read_vlx();
+        vlx_samples[i] = getDistanceReading();
         delay(ms_delay_per_sample_read);
       }
-
       std_dev = getStdDev(vlx_samples, vlx_sample_reads);
       avg_lidar_mm = getMean(vlx_samples, vlx_sample_reads);
       last_update = millis();
-      measurements[seconds_index] = avg_lidar_mm;
-      String b = String("Samples: " + String(vlx_sample_reads) + " Avg: " + String(avg_lidar_mm,1) + " " + String(millis() - start)) + "ms";
-      char buf[128] = {0};
+      //current_index = (last_update / 1000) % RING_BUFFER_SIZE;
+      current_index++;
+      if (current_index >= RING_BUFFER_SIZE)
+        current_index = 0;
+
+      measurements[current_index] = avg_lidar_mm;      
+      String b = String("# " + String(current_index) + " Avg: " + String(avg_lidar_mm,1) + "mm " + String(millis() - start)) + "ms";
       b.toCharArray(buf, b.length() + 1);
-      ESP_LOGI(TAG_VLX, "%s", buf);
+      ESP_LOGI(TAG_VLX, "%s %s", buf, error_message);
       return avg_lidar_mm;
     }
 };

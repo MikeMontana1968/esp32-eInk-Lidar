@@ -22,7 +22,7 @@ void setup() {
     Serial.print(" Version: ");
     Serial.println(TAG_MAIN);
     delay(100);
-
+    
         vlxTask = new VlxTask(I2C_SDA, I2C_SCL);
         einkTask = new EinkDisplayTask(I2C_SDA, I2C_SCL, vlxTask);
 
