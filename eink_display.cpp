@@ -18,6 +18,34 @@
 
 #define TAG_EINK "eink"
 
+// Tank constants for polynomial fuel calculation
+const float TANK_MAX_HEIGHT_MM = 152.0f;
+const float TANK_CAPACITY_GAL = 4.5f;
+const float TANK_CAPACITY_L = TANK_CAPACITY_GAL * 3.78541f;  // ~17.03 L
+
+// 5th-degree polynomial coefficients for volume from normalized height
+// Derived from Honda Goldwing tank STL voxel analysis (R² = 0.999)
+float getVolumeFromHeight(float height_mm) {
+    float h = height_mm / TANK_MAX_HEIGHT_MM;  // normalize 0-1
+    float v = -12.240043f * pow(h, 5)
+            + 37.229361f * pow(h, 4)
+            - 41.972364f * pow(h, 3)
+            + 19.803335f * pow(h, 2)
+            - 1.863900f * h
+            + 0.035199f;
+    return constrain(v * TANK_CAPACITY_L, 0, TANK_CAPACITY_L);
+}
+
+// Get gallons remaining from fuel height (mm)
+float getGallonsFromHeight(float height_mm) {
+    return getVolumeFromHeight(height_mm) / 3.78541f;
+}
+
+// Get fill percentage (0-100) from fuel height (mm)
+float getFillPercent(float height_mm) {
+    return (getVolumeFromHeight(height_mm) / TANK_CAPACITY_L) * 100.0f;
+}
+
 class EinkDisplayTask : public MyTask {
     private:
     uint    nBlink;    
@@ -107,14 +135,19 @@ public:
             noI2CReadings();
             return;
         }
-        percentFull = map(data.avg_lidar_mm, mmFullTank, mmEmptyTank, 1, 100); 
-        if(percentFull < 0)
-            percentFull = 0;
-        if(data.avg_lidar_mm < mmFullTank)
-            percentFull = 100;
+
+        // Convert LIDAR distance to fuel height (LIDAR measures distance from sensor to fuel surface)
+        float fuel_height_mm = mmEmptyTank - data.avg_lidar_mm;
+        if(fuel_height_mm < 0) fuel_height_mm = 0;
+        if(fuel_height_mm > TANK_MAX_HEIGHT_MM) fuel_height_mm = TANK_MAX_HEIGHT_MM;
+
+        // Use polynomial to calculate fuel volume and percentage
+        galRemain = getGallonsFromHeight(fuel_height_mm);
+        percentFull = (int)getFillPercent(fuel_height_mm);
+        if(percentFull > 100) percentFull = 100;
+        if(percentFull < 0) percentFull = 0;
 
         sFuelRemain[80] = {0};
-        galRemain = galCapacity * (.01 * percentFull);
         b = String(galRemain, 1) + " gal";
         if(galRemain < 1) {
             b = " GET GAS!";
