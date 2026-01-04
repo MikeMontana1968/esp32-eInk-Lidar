@@ -117,15 +117,7 @@ public:
     }
 
     void read_lidar_values() {
-       vlxTask->getUpdate(&data);
-        // SemaphoreHandle_t mutex = xSemaphoreCreateMutex();
-        // {
-        //     xSemaphoreTake(mutex, portMAX_DELAY); // enter critical section
-        //      ESP_LOGI(TAG_EINK, "Begin");
-        //      vlxTask->getUpdate(&data);
-        //     xSemaphoreGive(mutex); // exit critical section
-        // }
-        // vSemaphoreDelete(mutex);
+       vlxTask->getUpdate(&data);  // Thread-safe: mutex handled inside VlxTask
     }
 
     void updateDisplay() {

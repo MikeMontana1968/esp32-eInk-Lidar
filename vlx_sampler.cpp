@@ -23,13 +23,14 @@ typedef struct vlx_state {
 class VlxTask : public MyTask {
   private:
     Adafruit_VL6180X    vlx                       = Adafruit_VL6180X();
+    SemaphoreHandle_t   dataMutex;                // Mutex for thread-safe data access
     const     int       vlx_sample_reads          = 0;
     const     int       ms_delay_per_sample_read  = 0;
               float     avg_lidar_mm              = 0.0;
               float     std_dev                   = 0.0;
               uint      current_index             = 0;
               uint      measurements[RING_BUFFER_SIZE] = {0};
-              uint32_t  last_update               = 0;    
+              uint32_t  last_update               = 0;
               char      buf[64]                   = {0};
               char      error_message[RING_BUFFER_SIZE] = {0};
 public:
@@ -44,6 +45,7 @@ public:
               vlx_sample_reads(_vlx_sample_reads),  
               ms_delay_per_sample_read(_ms_delay_per_sample_read) 
           {
+            dataMutex = xSemaphoreCreateMutex();  // Initialize mutex once
             Wire.setPins(i2c_sda_pin, i2c_slc_pin);
             vlx.begin();
             if(initialize_with_random_data) {
@@ -63,22 +65,18 @@ public:
           }
 
     void getUpdate(vlx_state* state) {
-      ESP_LOGV(TAG_VLX, "Begin");
-        SemaphoreHandle_t mutex = xSemaphoreCreateMutex();
-        {
-            xSemaphoreTake(mutex, portMAX_DELAY); // enter critical section
-              state->avg_lidar_mm = avg_lidar_mm;
-              state->std_dev = std_dev;
-              state->current_index = current_index;
-              state->last_update = last_update;
-              for(int i = 0; i < RING_BUFFER_SIZE; i++) {
-                state->measurements[i] = measurements[i];        
-              }              
-              strcpy(state->error_message, error_message);
-            xSemaphoreGive(mutex); // exit critical section
+      ESP_LOGV(TAG_VLX, "getUpdate Begin");
+      xSemaphoreTake(dataMutex, portMAX_DELAY);  // enter critical section
+        state->avg_lidar_mm = avg_lidar_mm;
+        state->std_dev = std_dev;
+        state->current_index = current_index;
+        state->last_update = last_update;
+        for(int i = 0; i < RING_BUFFER_SIZE; i++) {
+          state->measurements[i] = measurements[i];
         }
-        vSemaphoreDelete(mutex);
-      ESP_LOGV(TAG_VLX, "End");
+        strcpy(state->error_message, error_message);
+      xSemaphoreGive(dataMutex);  // exit critical section
+      ESP_LOGV(TAG_VLX, "getUpdate End");
     }
 
     uint getMeasurementCount() {
@@ -173,21 +171,35 @@ protected:
     float getSampleSet() {
       ulong start = millis();
       uint8_t vlx_samples[vlx_sample_reads+1];
-      memset(error_message, 0, sizeof(error_message));
+      char local_error[RING_BUFFER_SIZE] = {0};
       memset(vlx_samples, 0, sizeof(vlx_samples));
-      for(int i =0; i < vlx_sample_reads; i++) {
+
+      // Sample readings (outside mutex - this takes time)
+      for(int i = 0; i < vlx_sample_reads; i++) {
         vlx_samples[i] = getDistanceReading();
         delay(ms_delay_per_sample_read);
       }
-      std_dev = getStdDev(vlx_samples, vlx_sample_reads);
-      avg_lidar_mm = getMean(vlx_samples, vlx_sample_reads);
-      last_update = millis();
-      //current_index = (last_update / 1000) % RING_BUFFER_SIZE;
-      current_index++;
-      if (current_index >= RING_BUFFER_SIZE)
-        current_index = 0;
 
-      measurements[current_index] = avg_lidar_mm;      
+      // Calculate results
+      float new_std_dev = getStdDev(vlx_samples, vlx_sample_reads);
+      float new_avg = getMean(vlx_samples, vlx_sample_reads);
+
+      // Copy error message before taking mutex
+      strcpy(local_error, error_message);
+
+      // Update shared state atomically
+      xSemaphoreTake(dataMutex, portMAX_DELAY);  // enter critical section
+        std_dev = new_std_dev;
+        avg_lidar_mm = new_avg;
+        last_update = millis();
+        current_index++;
+        if (current_index >= RING_BUFFER_SIZE)
+          current_index = 0;
+        measurements[current_index] = avg_lidar_mm;
+        memset(error_message, 0, sizeof(error_message));
+        strcpy(error_message, local_error);
+      xSemaphoreGive(dataMutex);  // exit critical section
+
       String b = String("# " + String(current_index) + " Avg: " + String(avg_lidar_mm,1) + "mm " + String(millis() - start)) + "ms";
       b.toCharArray(buf, b.length() + 1);
       ESP_LOGI(TAG_VLX, "%s %s", buf, error_message);
