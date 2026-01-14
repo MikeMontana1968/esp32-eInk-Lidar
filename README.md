@@ -6,7 +6,7 @@ An ESP32-based fuel tank monitoring system using a LIDAR sensor and e-ink displa
 
 Here's the 3d scan of the fuel tank
 
-![eInk LiDAR](docs/images/gas-tank.jpg)
+![eInk LiDAR](docs/images/gas-tank.png)
 
 ## Project Structure
 
