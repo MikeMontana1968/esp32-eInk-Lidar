@@ -1,8 +1,12 @@
-# Heltec Gas Gauge
+# ESP32 eInk+LiDAR Motorcycle Fuel Gauge
 
 An ESP32-based fuel tank monitoring system using a LIDAR sensor and e-ink display. Designed for vehicle fuel level monitoring with real-time display of fuel percentage, remaining gallons, estimated range, and historical consumption data.
 
 ![eInk LiDAR](docs/images/IMG_2220.jpg)
+
+Here's the 3d scan of the fuel tank
+
+![eInk LiDAR](docs/images/gas-tank.jpg)
 
 ## Project Structure
 
