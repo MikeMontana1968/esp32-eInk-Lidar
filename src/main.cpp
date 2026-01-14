@@ -4,27 +4,24 @@ https://github.com/todd-herbert/heltec-eink-modules/blob/main/docs/WirelessPaper
 
 */
 #define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
-
-#include "classes/VlxTask.cpp"
-#include "classes/EinkDisplayTask.cpp"
 #define I2C_SDA GPIO_NUM_39
 #define I2C_SCL GPIO_NUM_38
 #define TAG_MAIN "main"
+
+#include "classes/VlxTask.cpp"
+#include "classes/EinkDisplayTask.cpp"
+
 VlxTask *vlxTask;
 EinkDisplayTask *einkTask;
-	// esp_log_level_set("*", ESP_LOG_NONE);					//<<<Default logging level for all tags
-	// esp_log_level_set("OneOfMyTagNames", ESP_LOG_VERBOSE);
-	// esp_log_level_set("AnotherOfMyTagNames", ESP_LOG_WARN);
+
 void setup() {
     ESP_LOGE(TAG_MAIN, "Setup!");
 	Serial.begin(115200);
-    Serial.print("Running ");
-    Serial.print(" Version: ");
+    Serial.print("Running Version: ");
     Serial.println(TAG_MAIN);
-    delay(100);
     
-        vlxTask = new VlxTask(I2C_SDA, I2C_SCL);
-        einkTask = new EinkDisplayTask(I2C_SDA, I2C_SCL, vlxTask);
+    vlxTask = new VlxTask(I2C_SDA, I2C_SCL);
+    einkTask = new EinkDisplayTask(I2C_SDA, I2C_SCL, vlxTask);
 
     vlxTask->start();
     einkTask->start();
