@@ -6,15 +6,16 @@ An ESP32-based fuel tank monitoring system using a LIDAR sensor and e-ink displa
 
 ```
 heltec-gas-gauge/
-├── platformio.ini          # PlatformIO build configuration
+├── platformio.ini              # PlatformIO build configuration
 ├── src/
-│   ├── main.cpp  # Main entry point
-│   ├── VLXTask.cpp           # LIDAR sensor task (VL6180X)
-│   ├── EinkDisplay.cpp       # E-ink display task
-│   ├── TankCapacity.cpp      # Fuel volume calculations
-│   ├── MyTask.cpp            # FreeRTOS task base class
-│   └── README.md             # This file
-└── stl/                      # 3D printable enclosure files
+│   ├── main.cpp                # Main entry point
+│   ├── classes/
+│   │   ├── EinkDisplayTask.cpp     # E-ink display task
+│   │   ├── MyTask.cpp          # FreeRTOS task base class
+│   │   ├── TankCapacity.cpp    # Fuel volume calculations
+│   │   └── VlxTask.cpp         # LIDAR sensor task (VL6180X)
+│   └── README.md               # This file
+└── stl/                        # 3D printable enclosure files
 ```
 
 ## Hardware Requirements
@@ -98,10 +99,10 @@ The system uses FreeRTOS to run two independent tasks:
 | File | Description |
 |------|-------------|
 | `main.cpp` | Main entry point, initializes tasks |
-| `VLXTask.cpp` | LIDAR sensor driver, calculates mean/stddev, maintains history buffer |
-| `EinkDisplay.cpp` | Renders fuel gauge, stats, and historical graph on e-ink |
-| `TankCapacity.cpp` | Converts distance readings to volume using tank geometry |
-| `MyTask.cpp` | FreeRTOS task wrapper base class |
+| `classes/VlxTask.cpp` | LIDAR sensor driver, calculates mean/stddev, maintains history buffer |
+| `classes/EinkDisplayTask.cpp` | Renders fuel gauge, stats, and historical graph on e-ink |
+| `classes/TankCapacity.cpp` | Converts distance readings to volume using tank geometry |
+| `classes/MyTask.cpp` | FreeRTOS task wrapper base class |
 
 ### Data Flow
 1. VlxTask reads 20 samples from VL6180X sensor per cycle

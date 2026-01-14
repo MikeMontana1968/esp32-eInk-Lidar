@@ -10,7 +10,7 @@
 #include "esp_log.h"
 #include "string.h"
 #include "MyTask.cpp"
-#include "VLXTask.cpp"
+#include "VlxTask.cpp"
 #include <Wire.h>
 #include <driver/adc.h>
 
