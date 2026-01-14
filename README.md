@@ -4,7 +4,7 @@ An ESP32-based fuel tank monitoring system using a LIDAR sensor and e-ink displa
 
 ![eInk LiDAR](docs/images/IMG_2220.jpg)
 
-Here's the 3d scan of the fuel tank
+Here's the 3d scan of the fuel tank. As you can see it's curved in three dimensions - the width curves out, then inward. As does the height along the horizontal axis. The curves are complex enough that a 5th order polynomial is needed to estimate fuel capacity for a given point on the z-axis. ClaudeAI was used to generate the polynomial <b>by working from the 3d scan of the tank</b> directly! Very impressive. The STL itself is available in .\stl\
 
 ![eInk LiDAR](docs/images/gas-tank.png)
 
