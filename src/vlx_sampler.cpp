@@ -33,6 +33,7 @@ class VlxTask : public MyTask {
               uint32_t  last_update               = 0;    
               char      buf[64]                   = {0};
               char      error_message[RING_BUFFER_SIZE] = {0};
+              SemaphoreHandle_t mutex;
 public:
     VlxTask(
             gpio_num_t i2c_sda_pin,
@@ -41,7 +42,7 @@ public:
             uint _vlx_sample_reads = 20, 
             uint _ms_delay_per_sample_read = 10 
           ): 
-              MyTask(TAG_VLX, 4096, 3), 
+              MyTask(TAG_VLX, 8192, 3), 
               vlx_sample_reads(_vlx_sample_reads),  
               ms_delay_per_sample_read(_ms_delay_per_sample_read) 
           {
@@ -67,25 +68,22 @@ public:
               avg_lidar_mm = -1;
               std_dev = 0.0;
             }
+            mutex = xSemaphoreCreateMutex();
             ESP_LOGI(TAG_VLX,"Constructor Complete");
           }
 
     void getUpdate(vlx_state* state) {
       ESP_LOGV(TAG_VLX, "Begin");
-        SemaphoreHandle_t mutex = xSemaphoreCreateMutex();
-        {
-            xSemaphoreTake(mutex, portMAX_DELAY); // enter critical section
-              state->avg_lidar_mm = avg_lidar_mm;
-              state->std_dev = std_dev;
-              state->current_index = current_index;
-              state->last_update = last_update;
-              for(int i = 0; i < RING_BUFFER_SIZE; i++) {
-                state->measurements[i] = measurements[i];        
-              }              
-              strcpy(state->error_message, error_message);
-            xSemaphoreGive(mutex); // exit critical section
+      xSemaphoreTake(mutex, portMAX_DELAY);
+        state->avg_lidar_mm = avg_lidar_mm;
+        state->std_dev = std_dev;
+        state->current_index = current_index;
+        state->last_update = last_update;
+        for(int i = 0; i < RING_BUFFER_SIZE; i++) {
+          state->measurements[i] = measurements[i];
         }
-        vSemaphoreDelete(mutex);
+        strcpy(state->error_message, error_message);
+      xSemaphoreGive(mutex);
       ESP_LOGV(TAG_VLX, "End");
     }
 
@@ -104,7 +102,6 @@ protected:
       if(total)
         avg = total/(float)arrayCount;
 
-      //Serial.printf("getMean([], %i)= ", arrayCount); Serial.print("=" + String(avg, 2) + "\n");
       return avg;
     }
 
@@ -120,7 +117,6 @@ protected:
       if(total)
         variance = total/(float)arrayCount;
         stdDev = sqrt(variance);
-      //Serial.print("getStdDev([], " + String(arrayCount) + ")=" + String(stdDev,2) + "\n");
       return stdDev;
     }
 
@@ -133,7 +129,6 @@ protected:
 
     float getLuxReading() {
       float lux = vlx.readLux(VL6180X_ALS_GAIN_5);
-      //Serial.print("Lux: "); ESP_LOGI(TAG_VLX, lux);
       return lux;
     }
 
@@ -207,15 +202,14 @@ protected:
       std_dev = getStdDev(vlx_samples, vlx_sample_reads);
       avg_lidar_mm = getMean(vlx_samples, vlx_sample_reads);
       last_update = millis();
-      //current_index = (last_update / 1000) % RING_BUFFER_SIZE;
       current_index++;
       if (current_index >= RING_BUFFER_SIZE)
         current_index = 0;
 
-      measurements[current_index] = avg_lidar_mm;      
-      String b = String("# " + String(current_index) + " Avg: " + String(avg_lidar_mm,1) + "mm " + String(millis() - start)) + "ms";
-      b.toCharArray(buf, b.length() + 1);
-      ESP_LOGI(TAG_VLX, "%s %s", buf, error_message);
+      measurements[current_index] = avg_lidar_mm;
+      int avg_whole = (int)avg_lidar_mm;
+      int avg_frac = abs((int)(avg_lidar_mm * 10) % 10);
+      ESP_LOGI(TAG_VLX, "# %d Avg: %d.%dmm %lums %s", current_index, avg_whole, avg_frac, millis() - start, error_message);
       return avg_lidar_mm;
     }
 };

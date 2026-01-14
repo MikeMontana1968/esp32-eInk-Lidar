@@ -15,6 +15,7 @@
 #include <driver/adc.h>
 
 #include <Adafruit_GFX.h>    // Core graphics library
+#include "TankCapacity.cpp"
 
 #define TAG_EINK "eink"
 #define E290_WIDTH  290
@@ -54,9 +55,9 @@ public:
                 uint _mmEmptyTank = 152, 
                 float _galCapacity = 4.5, 
                 int _mpgAvg = 40, 
-                int _secRefresh = 30
+                int _secRefresh = 10
             ) : 
-            MyTask(TAG_EINK, 2048, 3), 
+            MyTask(TAG_EINK, 16384, 3), 
             nBlink(0), 
             vlxTask(_VlxTask), 
             mmFullTank(_mmFullTank),
@@ -86,20 +87,15 @@ public:
         } else {
             sprintf(result, "%dm %ds", minutes, seconds);
         }
-
-       // Serial.printf("getUptime(%i) -> %s\n", millis() / 1000UL, result);
     }
 
     void read_lidar_values() {
        vlxTask->getUpdate(&data);
-        // SemaphoreHandle_t mutex = xSemaphoreCreateMutex();
-        // {
-        //     xSemaphoreTake(mutex, portMAX_DELAY); // enter critical section
-        //      ESP_LOGI(TAG_EINK, "Begin");
-        //      vlxTask->getUpdate(&data);
-        //     xSemaphoreGive(mutex); // exit critical section
-        // }
-        // vSemaphoreDelete(mutex);
+        if(data.avg_lidar_mm < 0) {
+            ESP_LOGE(TAG_EINK, "No valid LIDAR readings. Check wiring and I2C address.");
+        } else {
+            ESP_LOGI(TAG_EINK, "LIDAR: %dmm", int(data.avg_lidar_mm));
+        }
     }
 
     void updateDisplay() {
@@ -109,26 +105,26 @@ public:
             noI2CReadings();
             return;
         }
-        percentFull = map(data.avg_lidar_mm, mmFullTank, mmEmptyTank, 1, 100); 
-        if(percentFull < 0)
-            percentFull = 0;
-        if(data.avg_lidar_mm < mmFullTank)
-            percentFull = 100;
 
-        sFuelRemain[80] = {0};
-        galRemain = galCapacity * (.01 * percentFull);
+        TankCapacity tankCapacity(mmFullTank - mmEmptyTank, galCapacity * 3.78541f); // Convert gal to liters for TankCapacity        
+        float height_of_fuel_mm = data.avg_lidar_mm - mmEmptyTank; // Adjust the raw LIDAR reading to be relative to the empty tank level 
+        percentFull = tankCapacity.getFillPercent(height_of_fuel_mm); //float from 0 to 100
+
+        memset(sFuelRemain, 0, sizeof(sFuelRemain));
+        galRemain = tankCapacity.getVolumeGallons(height_of_fuel_mm);
+        
         b = String(galRemain, 1) + " gal";
         if(galRemain < 1) {
             b = " GET GAS!";
         }
         b.toCharArray(sFuelRemain, b.length() + 1);
-
+        
         memset(sRangeEst, 0, sizeof(sRangeEst));
         b = String(int(mpgAvg * galRemain)) + "mi";
         b.toCharArray(sRangeEst, b.length() + 1);
 
-        memset(szTemp, sizeof(szTemp), 0);
-        getUptime(szTemp); 
+        memset(szTemp, 0, sizeof(szTemp));
+        getUptime(szTemp);
 
         if(strlen(data.error_message)) {
             b = String(data.error_message) + " " + szTemp;
@@ -136,7 +132,7 @@ public:
             b  =  "Lidar: " + String(data.avg_lidar_mm, 0) + String("mm (d=") + String(data.std_dev, 1) + ") Up " + szTemp;
         }
         
-        memset(sLidarUptime, sizeof(sLidarUptime), 0);
+        memset(sLidarUptime, 0, sizeof(sLidarUptime));
         b.toCharArray(sLidarUptime, b.length() + 1);
 
         ESP_LOGI(TAG_EINK, "%s, %s, %s", sFuelRemain, sRangeEst, sLidarUptime);
@@ -293,8 +289,11 @@ public:
 
 protected:
     void run() override {
+        ESP_LOGI(TAG_EINK, "run() started");
         splashScreen();
+        ESP_LOGI(TAG_EINK, "splashScreen() complete, entering loop");
         while (true) {
+            ESP_LOGI(TAG_EINK, "calling updateDisplay()");
             updateDisplay();
             vTaskDelay(secRefresh * 1000 / portTICK_PERIOD_MS);
         }
