@@ -5,8 +5,8 @@ https://github.com/todd-herbert/heltec-eink-modules/blob/main/docs/WirelessPaper
 */
 #define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 
-#include "vlx_sampler.cpp"
-#include "eink_display.cpp"
+#include "VLXTask.cpp"
+#include "EinkDisplay.cpp"
 #define I2C_SDA GPIO_NUM_39
 #define I2C_SCL GPIO_NUM_38
 #define TAG_MAIN "main"

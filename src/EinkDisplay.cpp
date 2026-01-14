@@ -10,7 +10,7 @@
 #include "esp_log.h"
 #include "string.h"
 #include "MyTask.cpp"
-#include "vlx_sampler.cpp"
+#include "VLXTask.cpp"
 #include <Wire.h>
 #include <driver/adc.h>
 
@@ -23,7 +23,6 @@
 
 class EinkDisplayTask : public MyTask {
     private:
-    uint    nBlink;    
     int     percentFull = 0;   // updateDisplay()
     float   galRemain = 0;   // updateDisplay
     char    buf[256] = {0};
@@ -35,6 +34,7 @@ class EinkDisplayTask : public MyTask {
     uint16_t offset = 1;
     String b = "";
     VlxTask* vlxTask;
+    
     EInkDisplay_VisionMasterE290 display;
 
     const int   mmFullTank;
@@ -58,7 +58,6 @@ public:
                 int _secRefresh = 10
             ) : 
             MyTask(TAG_EINK, 16384, 3), 
-            nBlink(0), 
             vlxTask(_VlxTask), 
             mmFullTank(_mmFullTank),
             mmEmptyTank(_mmEmptyTank),
@@ -71,6 +70,7 @@ public:
         ESP_LOGI(TAG_EINK,"Constructor Complete");
     }
 
+    // Formats uptime as human-readable string (e.g., "5h 23m" or "2d 3h")
     void getUptime(char *result) {
         unsigned long seconds = millis() / 1000UL;
         int days = seconds / 86400; // 86400 seconds in a day
@@ -89,6 +89,7 @@ public:
         }
     }
 
+    // Fetches latest sensor data from VlxTask
     void read_lidar_values() {
        vlxTask->getUpdate(&data);
         if(data.avg_lidar_mm < 0) {
@@ -98,6 +99,7 @@ public:
         }
     }
 
+    // Main display update - calculates fuel level and redraws e-ink screen
     void updateDisplay() {
         char szTemp[32] = {0};
         read_lidar_values();
@@ -145,9 +147,9 @@ public:
             drawTankFull();
             drawTankHistory();
         display.update();
-        return;
     }
 
+    // Draws the fuel level bar graph and range estimate
     void drawTankFull() {
         // ------------------------ Percent Full Bar graph -----------------------------
     
@@ -194,6 +196,7 @@ public:
         display.print(sLidarUptime);
     }
 
+    // Draws the historical measurement graph at bottom of display
     void drawTankHistory() {        
         uint graph_top = E290_HEIGHT * 0.667;
 
@@ -222,14 +225,14 @@ public:
         // Write the label eg "Tank"
         display.setCursor(label_x, label_y + text_height - offset*3);
         display.print(buf); 
-
-        return;
+        
         // Erase two vertical bars to the right of the current 'seconds'
-        // display.fillRect(
-        //     data.current_index+1, graph_top,
-        //     data.current_index+3, DISPLAY_HEIGHT - graph_top, 
-        //     WHITE
-        // );
+        display.fillRect(
+            data.current_index+1, graph_top,
+            data.current_index+3, E290_HEIGHT - graph_top, 
+            WHITE
+        );
+        
         //Draw an arrow atop the history
         for(int lazy = 8; lazy > 0; lazy--) {
             display.drawLine(
@@ -252,6 +255,7 @@ public:
         );
     }
 
+    // Shows error screen when sensor is unavailable
     void noI2CReadings() {
         display.clearMemory();  // Start a new drawing
         display.landscape();
@@ -265,6 +269,7 @@ public:
         delay(5000);
     }
 
+    // Shows startup info screen with version and config
     void splashScreen() {
         display.clearMemory();  // Start a new drawing
         display.landscape();
@@ -288,6 +293,7 @@ public:
     }
 
 protected:
+    // Main task loop - shows splash then updates display periodically
     void run() override {
         ESP_LOGI(TAG_EINK, "run() started");
         splashScreen();

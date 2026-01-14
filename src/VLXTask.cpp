@@ -31,7 +31,6 @@ class VlxTask : public MyTask {
               uint      current_index             = 0;
               uint      measurements[RING_BUFFER_SIZE] = {0};
               uint32_t  last_update               = 0;    
-              char      buf[64]                   = {0};
               char      error_message[RING_BUFFER_SIZE] = {0};
               SemaphoreHandle_t mutex;
 public:
@@ -72,8 +71,8 @@ public:
             ESP_LOGI(TAG_VLX,"Constructor Complete");
           }
 
+    // Copies current sensor state to caller's struct (thread-safe via mutex)
     void getUpdate(vlx_state* state) {
-      ESP_LOGV(TAG_VLX, "Begin");
       xSemaphoreTake(mutex, portMAX_DELAY);
         state->avg_lidar_mm = avg_lidar_mm;
         state->std_dev = std_dev;
@@ -84,14 +83,11 @@ public:
         }
         strcpy(state->error_message, error_message);
       xSemaphoreGive(mutex);
-      ESP_LOGV(TAG_VLX, "End");
     }
 
-    uint getMeasurementCount() {
-      return RING_BUFFER_SIZE;
-    }
 protected:
 
+    // Calculates arithmetic mean of an array of uint8_t values
     float getMean(uint8_t* val, int arrayCount) {
       long total = 0;
       float avg = 0;
@@ -105,6 +101,7 @@ protected:
       return avg;
     }
 
+    // Calculates standard deviation of an array of uint8_t values
     float getStdDev(uint8_t* val, int arrayCount) {
       float avg = getMean(val, arrayCount);
       float variance = 0;
@@ -120,6 +117,7 @@ protected:
       return stdDev;
     }
 
+    // Main task loop - continuously samples sensor at ~1 second intervals
     void run() override {
         while (true) {            
             getSampleSet();
@@ -127,11 +125,13 @@ protected:
         }
     }
 
+    // Reads ambient light level from VL6180X sensor (currently unused)
     float getLuxReading() {
       float lux = vlx.readLux(VL6180X_ALS_GAIN_5);
       return lux;
     }
 
+    // Reads single distance measurement, sets error_message on failure
     uint8_t getDistanceReading() {
       uint8_t range = vlx.readRange();
       uint8_t status = vlx.readRangeStatus();      
@@ -190,6 +190,7 @@ protected:
       return 0;
     }
 
+    // Takes multiple distance readings, computes mean/stddev, stores in history buffer
     float getSampleSet() {
       ulong start = millis();
       uint8_t vlx_samples[vlx_sample_reads+1];

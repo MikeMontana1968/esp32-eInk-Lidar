@@ -2,11 +2,26 @@
 
 An ESP32-based fuel tank monitoring system using a LIDAR sensor and e-ink display. Designed for vehicle fuel level monitoring with real-time display of fuel percentage, remaining gallons, estimated range, and historical consumption data.
 
+## Project Structure
+
+```
+heltec-gas-gauge/
+├── platformio.ini          # PlatformIO build configuration
+├── src/
+│   ├── main.cpp  # Main entry point
+│   ├── VLXTask.cpp           # LIDAR sensor task (VL6180X)
+│   ├── EinkDisplay.cpp       # E-ink display task
+│   ├── TankCapacity.cpp      # Fuel volume calculations
+│   ├── MyTask.cpp            # FreeRTOS task base class
+│   └── README.md             # This file
+└── stl/                      # 3D printable enclosure files
+```
+
 ## Hardware Requirements
 
 ### Microcontroller
-- **Heltec Vision Master E290** (ESP32-based board with integrated e-ink display)
-- 296x152 pixel e-ink display (3-color: black, white, red)
+- **Heltec Vision Master E290** (ESP32-S3 based board with integrated e-ink display)
+- 296x128 pixel e-ink display
 
 ### Sensor
 - **Adafruit VL6180X** Time-of-Flight LIDAR sensor
@@ -18,6 +33,7 @@ An ESP32-based fuel tank monitoring system using a LIDAR sensor and e-ink displa
 |----------|----------|
 | I2C SDA  | GPIO 39  |
 | I2C SCL  | GPIO 38  |
+| VEXT Power | GPIO 18 |
 
 ### Tank Configuration Defaults
 | Parameter | Default Value |
@@ -26,102 +42,78 @@ An ESP32-based fuel tank monitoring system using a LIDAR sensor and e-ink displa
 | Empty tank distance | 152mm |
 | Tank capacity | 4.5 gallons |
 | Average MPG | 40 |
-| Screen refresh interval | 30 seconds |
+| Screen refresh interval | 10 seconds |
 
-### 3D Printed Enclosure
-STL files for a custom enclosure are included in the `/stl/` directory:
-- `E290 Bottom.stl` - Bottom housing
-- `E290 Top.stl` - Top housing
-- `E290 Buttons.stl` - Button interface
+## Build Process (PlatformIO)
 
-## Dependencies
+### Prerequisites
+- [VS Code](https://code.visualstudio.com/) with [PlatformIO extension](https://platformio.org/install/ide?install=vscode)
 
-### Arduino Libraries
-- `heltec-eink-modules` - Heltec e-ink display driver
-- `Adafruit_VL6180X` - VL6180X LIDAR sensor driver
-- `Adafruit_GFX` - Graphics library
-- `Wire` - I2C communication
+### platformio.ini
+```ini
+[env:vision-master-e290]
+platform = espressif32
+board = heltec_wifi_lora_32_V3
+framework = arduino
+monitor_speed = 115200
+monitor_filters = esp32_exception_decoder
+board_upload.use_1200bps_touch = true
+build_flags =
+  -D ARDUINO_USB_CDC_ON_BOOT=1
+  -D Vision_Master_E290
+  -D CORE_DEBUG_LEVEL=4
+```
 
-### Fonts (included with Adafruit_GFX)
-- FreeSans9pt7b
-- FreeSansBold9pt7b
-- FreeSansBold12pt7b
-- FreeMono9pt7b
+### Log Levels (CORE_DEBUG_LEVEL)
+| Value | Level | Shows |
+|-------|-------|-------|
+| 0 | None | Nothing |
+| 1 | Error | `ESP_LOGE` only |
+| 2 | Warn | `ESP_LOGE`, `ESP_LOGW` |
+| 3 | Info | `ESP_LOGE`, `ESP_LOGW`, `ESP_LOGI` |
+| 4 | Debug | All above + `ESP_LOGD` |
+| 5 | Verbose | Everything including `ESP_LOGV` |
 
-### ESP32 Framework
-- FreeRTOS (included with ESP32 Arduino core)
-- ESP32 ADC driver
-- ESP32 logging framework
+### Build and Upload
+```powershell
+pio run --target upload
+```
 
-## Build Process
-
-### Using Arduino IDE
-
-1. **Install Board Support**
-   - Open Arduino IDE Preferences
-   - Add Heltec ESP32 board URL to Additional Board Manager URLs:
-     ```
-     https://github.com/Heltec-Aaron-Lee/WiFi_Kit_series/releases/download/0.0.9/package_heltec_esp32_index.json
-     ```
-   - Open Boards Manager and install "Heltec ESP32 Series Dev-boards"
-   - Select board: **Heltec Vision Master E290**
-
-2. **Install Libraries**
-   - Open Library Manager (Sketch > Include Library > Manage Libraries)
-   - Install:
-     - `Adafruit VL6180X`
-     - `Adafruit GFX Library`
-     - `heltec-eink-modules`
-
-3. **Compile and Upload**
-   - Open `heltec-gas-gauge.ino`
-   - Select the correct COM port
-   - Click Upload
-
-### Using PlatformIO
-
-1. **Create/Update platformio.ini**
-   ```ini
-   [env:visionmaster_e290]
-   platform = espressif32
-   board = heltec_vision_master_e290
-   framework = arduino
-   monitor_speed = 115200
-   lib_deps =
-       adafruit/Adafruit VL6180X
-       adafruit/Adafruit GFX Library
-       heltec-eink-modules
-   ```
-
-2. **Build and Upload**
-   ```powershell
-   pio run --target upload
-   ```
-
-3. **Monitor Serial Output**
-   ```powershell
-   pio device monitor --baud 115200
-   ```
+### Monitor Serial Output
+```powershell
+pio device monitor
+```
 
 ## Architecture
 
 The system uses FreeRTOS to run two independent tasks:
 
-| Task | Priority | Function |
-|------|----------|----------|
-| VlxTask | 3 | Continuously samples LIDAR sensor (100 samples/cycle) |
-| EinkDisplayTask | 3 | Updates e-ink display every 30 seconds |
+| Task | Stack Size | Priority | Function |
+|------|------------|----------|----------|
+| VlxTask | 8192 bytes | 3 | Continuously samples LIDAR sensor (~20 samples/cycle) |
+| EinkDisplayTask | 16384 bytes | 3 | Updates e-ink display periodically |
+
+### Source Files
+
+| File | Description |
+|------|-------------|
+| `main.cpp` | Main entry point, initializes tasks |
+| `VLXTask.cpp` | LIDAR sensor driver, calculates mean/stddev, maintains history buffer |
+| `EinkDisplay.cpp` | Renders fuel gauge, stats, and historical graph on e-ink |
+| `TankCapacity.cpp` | Converts distance readings to volume using tank geometry |
+| `MyTask.cpp` | FreeRTOS task wrapper base class |
 
 ### Data Flow
-1. VlxTask reads 100 samples from VL6180X sensor
+1. VlxTask reads 20 samples from VL6180X sensor per cycle
 2. Calculates average distance and standard deviation
 3. Stores result in 200-element ring buffer for history
 4. EinkDisplayTask retrieves latest data via mutex-protected access
-5. Display renders fuel gauge, statistics, and historical bar graph
+5. TankCapacity converts distance to volume (gallons/liters)
+6. Display renders fuel gauge, statistics, and historical bar graph
 
 ## Display Features
 
-- Current fuel level percentage with color bar
+- Current fuel level percentage with bar graph
 - Remaining fuel volume (gallons)
 - Estimated driving range (miles)
 - 200-sample historical fuel level graph
@@ -130,19 +122,33 @@ The system uses FreeRTOS to run two independent tasks:
 
 ## Customization
 
-Tank parameters can be modified in `eink_display.cpp`:
+Tank parameters can be set when creating the EinkDisplayTask:
 
 ```cpp
-EinkDisplayTask(VlxTask *vlxTask,
-                int8_t sda = -1,
-                int8_t scl = -1,
-                uint8_t tankFull_mm = 10,      // Distance when tank is full
-                uint8_t tankEmpty_mm = 152,    // Distance when tank is empty
-                float tankCapacity = 4.5,       // Tank capacity in gallons
-                uint8_t avgMpg = 40,            // Average fuel economy
-                uint16_t screenRefresh_sec = 30 // Display refresh interval
+einkTask = new EinkDisplayTask(
+    I2C_SDA, I2C_SCL,   // I2C pins
+    vlxTask,            // Pointer to VlxTask
+    10,                 // mmFullTank - distance when full
+    152,                // mmEmptyTank - distance when empty
+    4.5,                // galCapacity - tank capacity in gallons
+    40,                 // mpgAvg - average fuel economy
+    10                  // secRefresh - display refresh interval
 );
 ```
+
+## 3D Printed Enclosure
+
+STL files for a custom enclosure are included in the `/stl/` directory:
+- `E290 Bottom.stl` - Bottom housing
+- `E290 Top.stl` - Top housing
+- `E290 Buttons.stl` - Button interface
+
+## Dependencies
+
+Managed automatically by PlatformIO:
+- `heltec-eink-modules` - Heltec e-ink display driver
+- `Adafruit_VL6180X` - VL6180X LIDAR sensor driver
+- `Adafruit_GFX` - Graphics library
 
 ## License
 
