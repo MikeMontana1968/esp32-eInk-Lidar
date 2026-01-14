@@ -9,6 +9,7 @@
 
 #define TAG_VLX "vlx"
 #define RING_BUFFER_SIZE 200
+#define GPIO_VLX_PIN 18
 
 typedef struct vlx_state {
   uint32_t last_update;
@@ -37,15 +38,22 @@ public:
             gpio_num_t i2c_sda_pin,
             gpio_num_t i2c_slc_pin,
             bool initialize_with_random_data = false, 
-            uint _vlx_sample_reads = 100, 
+            uint _vlx_sample_reads = 20, 
             uint _ms_delay_per_sample_read = 10 
           ): 
               MyTask(TAG_VLX, 4096, 3), 
               vlx_sample_reads(_vlx_sample_reads),  
               ms_delay_per_sample_read(_ms_delay_per_sample_read) 
           {
-            Wire.setPins(i2c_sda_pin, i2c_slc_pin);
-            vlx.begin();
+            // Enable power to peripherals on Vision Master E290 (VEXT = GPIO 18, active HIGH)
+            pinMode(GPIO_VLX_PIN, OUTPUT);
+            digitalWrite(GPIO_VLX_PIN, HIGH);
+            delay(100);  // Allow power to stabilize
+
+            Wire.begin(i2c_sda_pin, i2c_slc_pin);
+            if (!vlx.begin(&Wire)) {
+                ESP_LOGE(TAG_VLX, "VL6180X not found! Check wiring and I2C address.");
+            }
             if(initialize_with_random_data) {
               for(int i = 0; i < RING_BUFFER_SIZE; i++) {
                 measurements[i] = random(0, 255);        
@@ -138,34 +146,51 @@ protected:
       avg_lidar_mm = -1;
       std_dev = -1;
       
-
       if  ((status >= VL6180X_ERROR_SYSERR_1) && (status <= VL6180X_ERROR_SYSERR_5)) {
         strcpy(error_message, "System error");
+        return 0;
       }
-      else if (status == VL6180X_ERROR_ECEFAIL) {
+
+      if (status == VL6180X_ERROR_ECEFAIL) {
         strcpy(error_message,  "ECE failure");
+        return 0;
       }
-      else if (status == VL6180X_ERROR_NOCONVERGE) {
+
+      if (status == VL6180X_ERROR_NOCONVERGE) {
         strcpy(error_message,  "No convergence");
+        return 0;
       }
-      else if (status == VL6180X_ERROR_RANGEIGNORE) {
+
+      if (status == VL6180X_ERROR_RANGEIGNORE) {
         strcpy(error_message,  "Ignoring range");
+        return 0;
       }
-      else if (status == VL6180X_ERROR_SNR) {
+
+      if (status == VL6180X_ERROR_SNR) {
         strcpy(error_message,  "Signal/Noise error");
+        return 0;
       }
-      else if (status == VL6180X_ERROR_RAWUFLOW) {
+
+      if (status == VL6180X_ERROR_RAWUFLOW) {
         strcpy(error_message,  "Raw reading underflow");
+        return 0;
       }
-      else if (status == VL6180X_ERROR_RAWOFLOW) {
+
+      if (status == VL6180X_ERROR_RAWOFLOW) {
         strcpy(error_message,  "Raw reading overflow");
+        return 0;
       }
-      else if (status == VL6180X_ERROR_RANGEUFLOW) {
+
+      if (status == VL6180X_ERROR_RANGEUFLOW) {
         strcpy(error_message,  "Range reading underflow");
+        return 0;
       }
-      else if (status == VL6180X_ERROR_RANGEOFLOW) {
+
+      if (status == VL6180X_ERROR_RANGEOFLOW) {
         strcpy(error_message, "Range reading overflow");
+        return 0;
       }
+
       ESP_LOGE(TAG_VLX, "--> %s", error_message);
       return 0;
     }

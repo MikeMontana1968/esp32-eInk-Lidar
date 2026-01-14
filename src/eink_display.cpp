@@ -17,6 +17,8 @@
 #include <Adafruit_GFX.h>    // Core graphics library
 
 #define TAG_EINK "eink"
+#define E290_WIDTH  290
+#define E290_HEIGHT 128
 
 class EinkDisplayTask : public MyTask {
     private:
@@ -42,7 +44,7 @@ class EinkDisplayTask : public MyTask {
     char sFuelRemain[80] = {0};
     char sRangeEst[10] = {0};
     char sLidarUptime[80] = {0};
-    vlx_state data= {0};
+    vlx_state data;
 public:
     EinkDisplayTask(                
                 gpio_num_t i2c_sda_pin,
@@ -63,7 +65,7 @@ public:
             galCapacity(_galCapacity),
             secRefresh(_secRefresh) 
         {
-        Wire.setPins(i2c_sda_pin, i2c_slc_pin);
+        // Wire already initialized by VlxTask
         ESP_LOGI(TAG_EINK, "Full %dmm Empty %dmm", _mmFullTank, _mmEmptyTank);
         ESP_LOGI(TAG_EINK,"Constructor Complete");
     }
@@ -184,7 +186,7 @@ public:
         text_width = display.getTextWidth(sRangeEst);
         text_height = display.getTextHeight(sRangeEst);
         display.setTextColor(BLACK);
-        display.setCursor(DISPLAY_WIDTH - text_width - 6, text_height *1.5);
+        display.setCursor(E290_WIDTH - text_width - 6, text_height *1.5);
         display.print(sRangeEst); // eg "127 mi"
 
         // ---- Print the LIDAR... Ping Depth ----    
@@ -193,16 +195,16 @@ public:
         text_width = display.getTextWidth(sLidarUptime);
         text_height = display.getTextHeight(sLidarUptime);
         display.setCursor(0, bargraph_height + 20 );
-        display.print(sLidarUptime);        
+        display.print(sLidarUptime);
     }
 
     void drawTankHistory() {        
-        uint graph_top = DISPLAY_HEIGHT * 0.66;
+        uint graph_top = E290_HEIGHT * 0.667;
 
         // Display a history bar graph for all measurements
         for(uint x = 0; x < data.measurement_count; x++) {
-            int y = map(data.measurements[x], mmFullTank, mmEmptyTank, DISPLAY_HEIGHT, graph_top); // map(value, fromLow, fromHigh, toLow, toHigh)
-            display.drawLine(x, DISPLAY_HEIGHT, x, y, BLACK);
+            int y = map(data.measurements[x], mmFullTank, mmEmptyTank, E290_HEIGHT, graph_top); // map(value, fromLow, fromHigh, toLow, toHigh)
+            display.drawLine(x, E290_HEIGHT, x, y, BLACK);
         }
         
         // Add a text label centered on the bottom edge 
@@ -211,10 +213,10 @@ public:
         text_width = display.getTextWidth(buf);
         text_height = display.getTextHeight(buf);
         int half_width = (text_width /2);
-        int16_t  label_x = (DISPLAY_WIDTH/2) - half_width ;
-        int16_t  label_y = DISPLAY_HEIGHT - text_height;
+        int16_t  label_x = (E290_WIDTH/2) - half_width ;
+        int16_t  label_y = graph_top - text_height;
         display.setTextColor(BLACK);
-
+        
         // Erase the background for the TANK label
         display.fillRect(
             label_x - offset, label_y - offset, 
@@ -224,8 +226,9 @@ public:
         // Write the label eg "Tank"
         display.setCursor(label_x, label_y + text_height - offset*3);
         display.print(buf); 
-        
-        // Erase two vertival bars to the right of the current 'seconds'
+
+        return;
+        // Erase two vertical bars to the right of the current 'seconds'
         // display.fillRect(
         //     data.current_index+1, graph_top,
         //     data.current_index+3, DISPLAY_HEIGHT - graph_top, 
@@ -248,7 +251,7 @@ public:
         // draw border around the history bar-graph
         display.drawRect(
             0, graph_top, 
-            DISPLAY_WIDTH, DISPLAY_HEIGHT - graph_top, 
+            E290_WIDTH, E290_HEIGHT - graph_top, 
             BLACK
         );
     }
