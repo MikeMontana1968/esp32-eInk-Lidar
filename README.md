@@ -2,6 +2,9 @@
 
 An ESP32-based fuel tank monitoring system using a LIDAR sensor and e-ink display. Designed for vehicle fuel level monitoring with real-time display of fuel percentage, remaining gallons, estimated range, and historical consumption data.
 
+The lidar (a vlx sensor from ada-fruit) sensor has a neobydium magnet epoxied to it so that it sticks to the upper-inside of the fuel tank and points down. The code reads the time-of-flight to the level of gasoline remaining in the tank about every 1s, with 10 reads spaced 10ms apart and weighted with std-dev to filter out vibrations, and sloshing effects of the surface. Orignially an ultra-sonic transducer was used but the gasoline destroyed the sensor. The overall accuracy is "good enough" to know when to get gas "soon". Some of my other repos explore other ways to estimate fuel consumption/range for the motorcycle.
+
+
 ![eInk LiDAR](docs/images/IMG_2220.jpg)
 
 Here's the 3d scan of the fuel tank. As you can see it's curved in three dimensions - the width curves out, then inward. As does the height along the horizontal axis. The curves are complex enough that a 5th order polynomial is needed to estimate fuel capacity for a given point on the z-axis. ClaudeAI was used to generate the polynomial <b>by working from the 3d scan of the tank</b> directly! Very impressive. The STL itself is available in .\stl\
