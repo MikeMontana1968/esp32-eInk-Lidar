@@ -22,6 +22,9 @@
 #define E290_HEIGHT 128
 
 class EinkDisplayTask : public MyTask {
+    /*
+        https://github.com/todd-herbert/heltec-eink-modules/blob/main/docs/VisionMaster/vision_master.md#getting-started
+    */
     private:
     int     percentFull = 0;   // updateDisplay()
     float   galRemain = 0;   // updateDisplay
